@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "State Index",
+  "description": "Machine-readable index layer for .agent-memory/ state. Updated on every state change.",
+  "type": "object",
+  "required": ["task_type", "flow_tier", "route_id", "current_phase", "last_updated"],
+  "properties": {
+    "task_type": {
+      "type": "string",
+      "enum": ["产品型", "能力型", "改造型", "修复型", "判断型"]
+    },
+    "flow_tier": {
+      "type": "string",
+      "enum": ["重流程", "中流程", "轻流程"]
+    },
+    "route_id": {
+      "type": "string",
+      "enum": ["P-H1", "A-M1", "C-M1", "F-M1", "J-L1"]
+    },
+    "current_phase": {
+      "type": "string",
+      "enum": ["planning", "execution", "acceptance", "complete"]
+    },
+    "current_round": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0
+    },
+    "features_completed": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0
+    },
+    "features_total": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0
+    },
+    "blockers_count": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0
+    },
+    "last_updated": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

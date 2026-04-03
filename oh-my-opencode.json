@@ -1,0 +1,21 @@
+{
+  "categories": {
+    "deep": {
+      "description": "Planning and complex execution tasks",
+      "model": "[REDACTED]"
+    },
+    "quick": {
+      "description": "Acceptance checks and lightweight verification",
+      "model": "[REDACTED]"
+    },
+    "ultrabrain": {
+      "description": "Capability planning requiring deep reasoning",
+      "model": "[REDACTED]",
+      "reasoningEffort": "xhigh"
+    }
+  },
+  "model_fallback": true,
+  "experimental": {
+    "preemptive_compaction": true
+  }
+}

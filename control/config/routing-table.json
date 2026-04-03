@@ -1,0 +1,56 @@
+{
+  "routes": {
+    "J-L1": {
+      "task_type": "判断型",
+      "description": "the user mainly wants a conclusion, comparison, explanation, or review",
+      "flow_tier": "轻流程",
+      "skill_stack": ["check"],
+      "startup_files": ["task.md"],
+      "deliverables": ["answer", "acceptance-report.md"],
+      "anti_shallow_bar": "do not pretend a decision task is complete just because a guess sounds plausible"
+    },
+    "F-M1": {
+      "task_type": "修复型",
+      "description": "something already broken must stop failing",
+      "flow_tier": "中流程",
+      "skill_stack": ["drive", "check"],
+      "startup_files": ["task.md", "working-memory.md", "round-contract.md", "orchestration-status.md"],
+      "deliverables": ["round-contract.md", "execution-status.md", "evidence-ledger.md", "acceptance-report.md"],
+      "anti_shallow_bar": "main failure path and one nearby regression check are both required"
+    },
+    "C-M1": {
+      "task_type": "改造型",
+      "description": "a bounded capability inside an existing system must change",
+      "flow_tier": "中流程",
+      "skill_stack": ["plan", "drive", "check"],
+      "startup_files": ["task.md", "capability-map.md", "gap-analysis.md", "working-memory.md", "round-contract.md", "orchestration-status.md"],
+      "deliverables": ["task.md", "round-contract.md", "execution-status.md", "evidence-ledger.md", "acceptance-report.md"],
+      "anti_shallow_bar": "do not count visible output alone as progress; the named gap must shrink"
+    },
+    "A-M1": {
+      "task_type": "能力型",
+      "description": "the real job is to make the system truly able to do something deeper or less visible",
+      "flow_tier": "中流程",
+      "skill_stack": ["capability-planner", "plan", "drive", "check"],
+      "startup_files": ["task.md", "baseline-source.md", "capability-map.md", "gap-analysis.md", "quality-guardrails.md", "working-memory.md", "round-contract.md", "orchestration-status.md"],
+      "deliverables": ["baseline-source.md", "capability-map.md", "gap-analysis.md", "task.md", "round-contract.md", "execution-status.md", "evidence-ledger.md", "acceptance-report.md"],
+      "anti_shallow_bar": "do not accept a shell that only looks complete; hidden rule or deeper ability must be proved"
+    },
+    "P-H1": {
+      "task_type": "产品型",
+      "description": "the job is to define or build a wider product or subsystem surface",
+      "flow_tier": "重流程",
+      "skill_stack": ["feature-planner", "plan", "drive", "check"],
+      "startup_files": ["task.md", "product-spec.md", "features.json", "features-summary.md", "baseline-source.md", "gap-analysis.md", "working-memory.md", "round-contract.md", "orchestration-status.md"],
+      "deliverables": ["product-spec.md", "features.json", "features-summary.md", "task.md", "round-contract.md", "execution-status.md", "evidence-ledger.md", "acceptance-report.md"],
+      "anti_shallow_bar": "do not accept minimum-only slices when the product promise or release bar says fuller depth is required"
+    }
+  },
+  "category_mapping": {
+    "判断型": "quick",
+    "修复型": "deep",
+    "改造型": "deep",
+    "能力型": "ultrabrain",
+    "产品型": "visual-engineering"
+  }
+}

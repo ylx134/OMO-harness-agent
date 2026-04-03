@@ -1,0 +1,17 @@
+{
+  "轻流程": {
+    "description": "one bounded goal, small localized changes, no long-lived coordination needed",
+    "requires_planning": false,
+    "requires_multi_round": false
+  },
+  "中流程": {
+    "description": "focused capability change spanning several files, independent acceptance important",
+    "requires_planning": true,
+    "requires_multi_round": false
+  },
+  "重流程": {
+    "description": "product-shaped task, whole-task planning must be externalized, many rounds expected",
+    "requires_planning": true,
+    "requires_multi_round": true
+  }
+}

@@ -1,0 +1,66 @@
+[
+  {
+    "query": "这个需求你直接自己推进到完成就行，别做一步问一步。除非有高风险决定或者权限不够，不然你就按你判断继续往前做。",
+    "should_trigger": true
+  },
+  {
+    "query": "Use self-driving mode on this bugfix. Keep the overall goal in view, avoid side quests, and only stop if you hit a real blocker.",
+    "should_trigger": true
+  },
+  {
+    "query": "我想要的是 Ralph 那种感觉：你先自己拆解，然后连续执行，不要每改一点就回来问我，直到目标达成。",
+    "should_trigger": true
+  },
+  {
+    "query": "Please handle this migration end-to-end. Make reasonable assumptions, keep moving, and do not get stuck polishing subproblems that do not affect the rollout.",
+    "should_trigger": true
+  },
+  {
+    "query": "这个功能你从 plan 到实现到验证都一起做完，中间正常的小决定你自己拍板，别每个 checkpoint 都等我。",
+    "should_trigger": true
+  },
+  {
+    "query": "Take this task and drive it all the way home. I want progress without hand-holding, but don't lose sight of the original ship goal.",
+    "should_trigger": true
+  },
+  {
+    "query": "帮我修这个导出问题，持续推进到你能验证修复为止。旁边那些 TODO 和顺手清理先别陷进去，除非它真的挡住主线。",
+    "should_trigger": true
+  },
+  {
+    "query": "You can keep going without waiting for me between steps. The important thing is to finish the main outcome and not disappear into clever refactors.",
+    "should_trigger": true
+  },
+  {
+    "query": "先帮我写一个实施计划，列出 5 个步骤。每做完一步都停下来等我确认，不要自动继续。",
+    "should_trigger": false
+  },
+  {
+    "query": "Can you brainstorm a few approaches for this feature and talk through tradeoffs with me before touching any code?",
+    "should_trigger": false
+  },
+  {
+    "query": "我想做一个每天早上自动跑的 recurring automation，帮我设个定时任务去检查报表和发提醒。",
+    "should_trigger": false
+  },
+  {
+    "query": "Review this PR for bugs and regression risks. I don't want implementation yet, just findings ordered by severity.",
+    "should_trigger": false
+  },
+  {
+    "query": "先别动代码，帮我解释一下为什么这个测试会 flaky。我们先理解原因，再决定要不要修。",
+    "should_trigger": false
+  },
+  {
+    "query": "Please act cautiously here: show me the exact commands you would run, but wait for approval after each command because this touches production data.",
+    "should_trigger": false
+  },
+  {
+    "query": "I need a design doc for this workflow. Let's refine the requirements section by section together instead of implementing anything yet.",
+    "should_trigger": false
+  },
+  {
+    "query": "帮我找有没有 skill 可以做 self-driving workflow，我现在先不安装，也先不要执行任务，只要帮我查一下选项。",
+    "should_trigger": false
+  }
+]

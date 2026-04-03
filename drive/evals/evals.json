@@ -1,0 +1,89 @@
+{
+  "skill_name": "drive",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Fix the login regression and keep going until users can sign in again. Do not ask me after every step. There are also a few unrelated lint warnings in the repo, but shipping the login fix matters most.",
+      "expected_output": "The agent prioritizes restoring sign-in, avoids spending the run on unrelated lint work, makes continuous progress without routine confirmation requests, and finishes with verification or a concrete blocker tied to the login issue.",
+      "files": [],
+      "expectations": [
+        "The run restates the primary goal as restoring sign-in rather than cleaning unrelated lint warnings.",
+        "The run avoids turning unrelated lint cleanup into the main task unless it becomes a blocker.",
+        "The run performs multiple concrete steps without asking for confirmation between normal steps.",
+        "The run ends with either verification of the login fix or a specific blocker connected to the login path."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Our export job is failing. Drive the investigation to a conclusion and keep the overall goal in view. There may be old TODOs and cleanup opportunities around the exporter, but ignore side quests unless they are required to get exports working again.",
+      "expected_output": "The agent keeps re-anchoring on restoring the export job, uses bounded investigation instead of endlessly exploring side issues, and avoids spending the task on cleanup work that does not directly help the failing export path.",
+      "files": [],
+      "expectations": [
+        "The run repeatedly ties investigation work back to restoring the export job.",
+        "The run uses bounded attempts and changes direction after unproductive investigation.",
+        "The run defers cleanup and TODO chasing unless they directly block the export fix.",
+        "The run stops at a verified fix, a well-supported root cause, or a concrete external blocker."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Build the missing CSV import feature end-to-end. Make reasonable assumptions and keep going until it is implemented and tested. Please do not stop for every intermediate decision unless there is real risk.",
+      "expected_output": "The agent defines a compact mission, executes through planning and implementation without waiting between normal steps, verifies the finished feature, and reports any remaining assumptions or residual risks at the end.",
+      "files": [],
+      "expectations": [
+        "The run establishes a concise mission contract with goal, done criteria, and assumptions.",
+        "The run executes continuously instead of pausing after each batch for routine feedback.",
+        "The run verifies implementation before claiming the feature is done.",
+        "The run mentions remaining assumptions or residual risk in the final report."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Fix the billing reconciliation workflow end-to-end. Track the work as nested tasks when needed: if a main task opens subproblems, finish the required child tasks before marking the parent complete. If a deep child turns out to be a nice-to-have optimization instead of a blocker, park it and continue the mainline instead of getting stuck there.",
+      "expected_output": "The agent organizes the work as a hierarchical task tree, completes required child tasks before rolling completion up to the parent, and explicitly parks low-priority deep children instead of either endlessly decomposing them or silently abandoning them.",
+      "files": [],
+      "expectations": [
+        "The run uses a hierarchical task structure or equivalent parent-child tracking rather than only flat branches.",
+        "The run does not mark a parent task complete while required child tasks are still unresolved.",
+        "The run explicitly marks low-priority deep work as deferred, parked, or optimization follow-up when it is not on the critical path.",
+        "The run returns from completed child tasks back to the parent and then proceeds to the next sibling or mainline task."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Take over this half-finished incident fix. The final goal is to restore the nightly settlement job. The active node right now is 2.1 confirm whether the duplicate-charge bug comes from retry logic or stale cache data. Keep going without asking after every step, but when you state the next step, it must fit both the overall goal and the active node instead of drifting into cleanup work or jumping ahead to rollout tasks.",
+      "expected_output": "The agent chooses next steps that are tied both to restoring the nightly settlement job and to resolving the active node 2.1, avoids vague or generic forward plans, and does not drift into unrelated cleanup or later rollout work before the active node is resolved.",
+      "files": [],
+      "expectations": [
+        "The run keeps the final goal of restoring the nightly settlement job visible while working inside node 2.1.",
+        "The run chooses a next step that directly helps resolve node 2.1 rather than merely sounding generally useful.",
+        "The run avoids jumping to later rollout, cleanup, or polishing work while the active node is still unresolved.",
+        "The run explains or makes clear why the chosen next step helps both the active node and the final goal."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Use goal-driven autopilot on this large task and keep your progress updates structured. We are implementing a reporting pipeline in phases. I want updates that stay grounded instead of random summaries. Keep going without asking after every step.",
+      "expected_output": "The agent uses a stable progress-update shape that keeps the final goal, current node, new evidence, next step, and the reason for that next step visible, instead of ending each action with a loose or drifting plan fragment.",
+      "files": [],
+      "expectations": [
+        "The run includes a stable update structure or equivalent repeated fields instead of ad hoc summaries.",
+        "The run keeps the final goal and current node visible in progress updates for a large task.",
+        "The run states a bounded next step rather than a vague future direction.",
+        "The run makes clear why the next step fits both the local work and the larger task."
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Take over this task from the middle. The final goal is to restore the invoice sync pipeline. Work already completed: node 1 and node 2 are done. We are now in node 3.2 checking whether the queue backlog comes from duplicate retries or a stuck worker. Node 3.3 and node 4 have not started. Keep going without routine confirmation, and do not restart from the beginning unless the whole plan is actually unclear.",
+      "expected_output": "The agent rebuilds the current state from the handoff, preserves already completed work, continues from the handed-over branch when possible, and avoids restarting the whole task from node 1.",
+      "files": [],
+      "expectations": [
+        "The run reconstructs the active branch and nearby task state from the handoff before going deeper.",
+        "The run preserves nodes 1 and 2 as completed unless new evidence directly invalidates them.",
+        "The run continues from node 3.2 or its immediate parent branch instead of restarting the whole task from node 1.",
+        "The run identifies any missing assumptions in the handoff and proceeds with a bounded continuation plan."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Drive"
+  short_description: "Keep the task moving toward the goal"
+  default_prompt: "Use $drive to keep driving this task to completion without waiting for me unless a real blocker or risky decision appears. When you state the next step, make sure it clearly serves both the overall goal and the active local node instead of drifting deeper or jumping ahead. For larger tasks, use stable progress updates that show goal, current node, what changed, next step, and why that next step fits. If this is a mid-run handoff, rebuild the current branch first and continue from there instead of restarting the whole task. For long-running work also use $memory so the global plan stays in task.md and the active local plan stays in working-memory.md."

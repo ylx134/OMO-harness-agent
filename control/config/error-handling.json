@@ -1,0 +1,29 @@
+{
+  "agent_failures": {
+    "planner": {
+      "max_retries": 3,
+      "timeout_minutes": 30,
+      "failure_conditions": [
+        { "condition": "missing_required_files", "files": ["product-spec.md", "features.json"], "action": "restart_agent" },
+        { "condition": "timeout", "threshold_minutes": 30, "action": "escalate_to_user" }
+      ]
+    },
+    "executor": {
+      "max_retries": 2,
+      "failure_conditions": [
+        { "condition": "consecutive_failures", "threshold": 2, "action": "force_round_restart" }
+      ]
+    },
+    "checker": {
+      "max_retries": 1,
+      "failure_conditions": [
+        { "condition": "repeated_rejection", "threshold": 3, "action": "escalate_to_user" }
+      ]
+    }
+  },
+  "auto_pilot_interruptions": {
+    "p0_blockers_threshold": 5,
+    "consecutive_failures_threshold": 5,
+    "time_limit_hours": 12
+  }
+}
