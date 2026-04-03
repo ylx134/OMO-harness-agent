@@ -117,6 +117,17 @@ When you catch yourself using these phrases:
 
 Single-thread role-playing is only allowed in `降级模式`, and only when subagent launch failed or the user explicitly asked to avoid subagents. If `降级模式` is used, record it in `.agent-memory/orchestration-status.md` and tell the user.
 
+### Multi-Agent Coordination
+
+See `config/coordination-rules.md` for the complete file ownership model, state machine, and deadlock prevention rules.
+
+Key principles:
+- Each file has a single write-owner per round (see ownership table in coordination-rules.md)
+- `activity.jsonl` and `journal.md` are append-only shared files
+- `orchestration-status.md` is the state machine — agents must verify `Expected Next Writer` matches their role before writing
+- Round contract is the coordination point between executor and checker (turn-taking, not simultaneous)
+- If no agent writes for 10 minutes, control re-dispatches the expected writer or triggers context reset
+
 ## OMO Integration Rules
 
 ### Task Dispatch
@@ -183,12 +194,111 @@ After any `rejected` or meaningful `needs-follow-up` result:
 3. Write or update `.agent-memory/quality-guardrails.md`
 4. Require the next round contract to include those raised bars
 
-## Error Handling
+## Dynamic Quality Gate
 
-Follow `config/error-handling.json` for retry policies:
+**CRITICAL**: Quality thresholds are not static. They evolve based on project history.
+
+### Threshold Adjustment Rules
+
+After every `rejected` acceptance:
+1. Read the failure class from `acceptance-report.md`
+2. Count consecutive rejections for the same failure class
+3. Apply threshold adjustment:
+
+| Consecutive Rejections | Action |
+|------------------------|--------|
+| 1 | Add specific rule to `quality-guardrails.md` |
+| 2 | Raise the relevant scoring dimension threshold by +0.5 |
+| 3+ | Escalate to user — the harness cannot solve this alone |
+
+After every 5 consecutive `accepted` results:
+1. Review `quality-guardrails.md` for rules that haven't been triggered
+2. Candidate rules for relaxation (but do NOT remove automatically)
+3. Log the observation in `acceptance-lessons.md`
+
+### Guardrails File Format
+
+```markdown
+# Quality Guardrails
+
+## Active Rules (newest first)
+
+### Rule G-003 (added: 2026-04-03, trigger: consecutive_rejection)
+- Source failure: executor produced stub API endpoints
+- Raised bar: All API endpoints must return real data, not hardcoded/mock responses
+- Scoring impact: 功能完整性 threshold raised from 8 → 8.5
+- Relaxation candidate: No (triggered 2x in last 10 rounds)
+
+### Rule G-002 (added: 2026-04-02, trigger: missing_evidence)
+- Source failure: checker accepted without running playwright
+- Raised bar: Web acceptance MUST include screenshot evidence
+- Scoring impact: None (process rule, not score adjustment)
+- Relaxation candidate: No
+
+### Rule G-001 (added: 2026-04-01, trigger: shallow_work)
+- Source failure: login form had no error handling
+- Raised bar: Every user-facing form must handle validation errors
+- Scoring impact: 产品深度 threshold raised from 7 → 7.5
+- Relaxation candidate: Yes (not triggered in last 20 rounds)
+```
+
+### Integration with Sprint Contract
+
+When `quality-guardrails.md` exists:
+1. Executor MUST read it before drafting Sprint Contract
+2. All active rules MUST be incorporated into the contract's acceptance criteria
+3. Checker MUST verify each active rule during acceptance
+4. Any rule violation → automatic `rejected` regardless of other scores
+
+## Error Handling and Auto-Recovery
+
+Follow `config/error-handling.json` for retry policies and recovery procedures.
+
+### Retry Policies
 - Planner: max 3 retries, 30 min timeout
 - Executor: max 2 retries, force round restart on consecutive failures
 - Checker: max 1 retry, escalate to user on repeated rejection
+
+### Auto-Recovery Procedures
+
+Control must detect and handle these failure conditions automatically:
+
+**Executor failures:**
+1. `smoke_test_failure` → `git revert` to last good commit, re-run smoke test
+2. `features_json_corruption` → `git checkout` features.json, restart executor with warning
+3. `context_anxiety` → trigger Context Reset via `memory/scripts/context_reset.sh`
+4. `consecutive_failures` (2x same round) → force fresh round restart
+5. `empty_output` → restart agent (OMO `empty-task-response-detector` hook assists)
+
+**Checker failures:**
+1. `leniency_drift` → force calibration check, re-read calibration-examples.md
+2. `no_evidence_verification` → reject acceptance, add rule to quality-guardrails.md
+3. `repeated_rejection` (3x same feature) → escalate to user with last 3 rejection reasons
+
+**Planner failures:**
+1. `missing_required_files` → restart planner (check files per route in error-handling.json)
+2. `empty_output` → restart agent
+
+### Recovery Decision Tree
+
+```
+Agent returns → Check output
+  ├── Output empty? → restart_agent (max retries from config)
+  ├── Required files missing? → restart_agent
+  ├── Smoke test failed? → git revert → re-run smoke
+  ├── features.json corrupted? → git checkout → restart
+  ├── Context anxiety signals? → context_reset.sh → fresh agent
+  ├── Consecutive failures? → force_round_restart
+  └── Max retries exceeded? → escalate_to_user
+```
+
+### OMO Platform Hooks That Assist Recovery
+- `delegate-task-retry`: Automatically retries failed task() dispatches
+- `unstable-agent-babysitter`: Monitors agent health, intervenes on timeout/anomaly
+- `edit-error-recovery`: Auto-recovers from Edit tool failures
+- `json-error-recovery`: Auto-recovers from JSON parse errors in state files
+- `empty-task-response-detector`: Detects when a subagent returns nothing
+- `write-existing-file-guard`: Prevents overwriting files without reading first
 
 ## Auto-Pilot Mode
 

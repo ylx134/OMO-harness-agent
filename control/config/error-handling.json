@@ -4,26 +4,142 @@
       "max_retries": 3,
       "timeout_minutes": 30,
       "failure_conditions": [
-        { "condition": "missing_required_files", "files": ["product-spec.md", "features.json"], "action": "restart_agent" },
-        { "condition": "timeout", "threshold_minutes": 30, "action": "escalate_to_user" }
+        {
+          "condition": "missing_required_files",
+          "description": "Planner finished but required output files are missing",
+          "detection": "Check file existence: product-spec.md, features.json (产品型) or task.md (all types)",
+          "files_by_route": {
+            "P-H1": ["product-spec.md", "features.json", "features-summary.md", "task.md"],
+            "A-M1": ["baseline-source.md", "capability-map.md", "gap-analysis.md", "task.md"],
+            "C-M1": ["task.md"],
+            "F-M1": ["task.md"],
+            "J-L1": ["task.md"]
+          },
+          "action": "restart_agent",
+          "escalation": "If still missing after max_retries → escalate_to_user"
+        },
+        {
+          "condition": "timeout",
+          "description": "Planner exceeded time limit without completing",
+          "threshold_minutes": 30,
+          "action": "escalate_to_user"
+        },
+        {
+          "condition": "empty_output",
+          "description": "Planner returned without writing any files (detected by empty-task-response-detector hook)",
+          "action": "restart_agent"
+        }
       ]
     },
     "executor": {
       "max_retries": 2,
+      "timeout_minutes": 120,
       "failure_conditions": [
-        { "condition": "consecutive_failures", "threshold": 2, "action": "force_round_restart" }
+        {
+          "condition": "consecutive_failures",
+          "description": "Executor failed the same round multiple times in a row",
+          "threshold": 2,
+          "action": "force_round_restart",
+          "escalation": "If still failing after fresh round → mark_blocked_continue_next"
+        },
+        {
+          "condition": "smoke_test_failure",
+          "description": "Smoke test failed at session start — codebase is in broken state",
+          "action": "git_revert_to_last_good_commit",
+          "escalation": "If revert doesn't fix → escalate_to_user"
+        },
+        {
+          "condition": "features_json_corruption",
+          "description": "Executor modified features.json fields beyond passes (detected by write-existing-file-guard hook)",
+          "action": "git_checkout_features_json_and_restart",
+          "escalation": "Immediate restart with warning reinforcement"
+        },
+        {
+          "condition": "context_anxiety",
+          "description": "Executor shows premature completion signals while features remain incomplete",
+          "detection_signals": ["looks about done", "can be improved later", "basically complete", "should work"],
+          "action": "trigger_context_reset",
+          "escalation": "Generate handoff.md and spawn fresh agent"
+        },
+        {
+          "condition": "empty_output",
+          "description": "Executor returned without making code changes or writing evidence",
+          "action": "restart_agent"
+        }
       ]
     },
     "checker": {
       "max_retries": 1,
+      "timeout_minutes": 30,
       "failure_conditions": [
-        { "condition": "repeated_rejection", "threshold": 3, "action": "escalate_to_user" }
+        {
+          "condition": "repeated_rejection",
+          "description": "Same feature rejected 3+ times — checker/executor may be in a loop",
+          "threshold": 3,
+          "action": "escalate_to_user",
+          "context": "Include last 3 rejection reasons in escalation message"
+        },
+        {
+          "condition": "leniency_drift",
+          "description": "Checker approving work that should fail (detected by calibration loop)",
+          "detection": "Scores consistently > 8.5 OR approved work breaks in next round",
+          "action": "force_calibration_check",
+          "escalation": "Re-read calibration-examples.md and tighten quality-guardrails.md"
+        },
+        {
+          "condition": "no_evidence_verification",
+          "description": "Checker issued acceptance without running any verification tools",
+          "detection": "acceptance-report.md has no 'Direct verification' section or all entries say 'indirect proof'",
+          "action": "reject_acceptance_and_retry",
+          "escalation": "Add rule to quality-guardrails.md: checker MUST run verification tools"
+        },
+        {
+          "condition": "empty_output",
+          "description": "Checker returned without writing acceptance-report.md",
+          "action": "restart_agent"
+        }
+      ]
+    }
+  },
+  "recovery_procedures": {
+    "git_revert_to_last_good_commit": {
+      "steps": [
+        "Run: git log --oneline -10",
+        "Find last commit before current round",
+        "Run: git checkout {commit} -- .",
+        "Run: smoke test",
+        "If smoke passes: continue from that state",
+        "If smoke fails: escalate to user"
+      ]
+    },
+    "git_checkout_features_json_and_restart": {
+      "steps": [
+        "Run: git checkout HEAD -- .agent-memory/features.json",
+        "Log violation in activity.jsonl",
+        "Restart executor with reinforced warning"
+      ]
+    },
+    "trigger_context_reset": {
+      "steps": [
+        "Run: memory/scripts/context_reset.sh {workspace} context-anxiety",
+        "Generate handoff.md with precise next step",
+        "Spawn fresh executor agent",
+        "Fresh agent reads handoff.md first"
+      ]
+    },
+    "force_calibration_check": {
+      "steps": [
+        "Checker reads references/calibration-examples.md",
+        "Checker re-evaluates last 3 acceptances against examples",
+        "If drift confirmed: update quality-guardrails.md",
+        "Re-run acceptance on current round"
       ]
     }
   },
   "auto_pilot_interruptions": {
     "p0_blockers_threshold": 5,
     "consecutive_failures_threshold": 5,
-    "time_limit_hours": 12
+    "time_limit_hours": 12,
+    "escalation_message_template": "Auto-pilot interrupted: {reason}. {blocked_count} features blocked, {completed_count}/{total_count} completed. Last error: {last_error}. Please advise."
   }
 }

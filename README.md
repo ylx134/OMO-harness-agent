@@ -20,25 +20,28 @@ OpenCode + OMO 增强版长任务技能架构。
 ```
 omo-harness-skills/
 ├── control/                    # 主编排技能
-│   ├── skill.md                # 精简版编排逻辑 (~120 行)
+│   ├── skill.md                # 精简版编排逻辑 (~200 行)
 │   ├── config/                 # 结构化配置
 │   │   ├── routing-table.json  # 路由规则表
 │   │   ├── task-types.json     # 任务类型定义
 │   │   ├── flow-tiers.json     # 流程层级配置
-│   │   └── error-handling.json # 错误处理策略
+│   │   ├── error-handling.json # 错误处理策略 + 自动恢复流程
+│   │   └── coordination-rules.md # 多代理协调规则
 │   ├── agents/                 # Agent Prompt 模板
 │   │   ├── planner.md          # 规划代理
 │   │   ├── executor.md         # 执行代理
 │   │   └── checker.md          # 验收代理
 │   └── references/             # 参考文档
 │       ├── routing-contract.md
-│       └── simplification-principles.md
+│       ├── simplification-principles.md
+│       ├── harness-eval-framework.md  # 评估框架
+│       └── model-upgrade-checklist.md # 模型升级检查清单
 ├── drive/                      # 执行技能 (+ OMO 并行规则)
 ├── check/                      # 验收技能 (+ OMO 验证集成)
 ├── plan/                       # 规划技能 (+ OMO 集成规则)
 ├── memory/                     # 状态管理 (+ JSON 索引层)
-│   ├── templates/              # 状态文件模板
-│   ├── scripts/                # Helper 脚本
+│   ├── templates/              # 状态文件模板 (+ metrics 模板)
+│   ├── scripts/                # Helper 脚本 (+ context_reset.sh)
 │   └── references/             # 文件契约
 ├── feature-planner/            # 产品规划技能
 ├── capability-planner/         # 能力规划技能
@@ -99,12 +102,22 @@ ln -s /Users/tianyuan/Documents/my_workspace/omo-harness-skills/capability-plann
 - [x] **Phase 0**: 技能内部结构重组（跨平台通用）
 - [x] **Phase 1**: OMO 基础迁移（task() 替代 spawn_agent）
 - [x] **Phase 2**: Hook 集成（48 builtin hooks active, 自定义冗余已移除）
-- [ ] **Phase 3**: 高级优化（动态质量门禁、自动错误恢复）
-- [ ] **Phase 4**: 验证与迭代
+- [x] **Phase 3**: 高级优化（动态质量门禁、自动错误恢复、多代理协调、性能监控）
+- [x] **Phase 4**: 验证与迭代（评估框架、简化检查清单）
 
 ### Platform-Enforced Behavior (via OMO Built-in Hooks)
 - **48 built-in hooks active** — context monitoring, compaction protection, error recovery, model fallback, etc.
 - **1 custom hook retained** — `evidence-verifier.js` (domain-specific acceptance validation)
 - **2 custom hooks removed** — `compaction-protector.js` and `auto-state-writeback.js` (replaced by builtins)
+
+### Phase 3 新增能力
+- **动态质量门禁**: quality-guardrails.md 随项目历史自动收紧/放宽阈值
+- **自动错误恢复**: 5 种 executor 失败场景 + 4 种 checker 失败场景的自动恢复流程
+- **多代理协调**: 文件所有权模型、状态机、死锁预防
+- **性能监控**: metrics.json 模板 + activity.jsonl 增强
+
+### Phase 4 新增能力
+- **评估框架**: harness-eval-framework.md — 对比 harness vs solo 模式的系统性方法
+- **简化检查清单**: model-upgrade-checklist.md — 每次模型升级时评估哪些组件可以移除
 
 详细路线图见 `.sisyphus/plans/omo-optimization-plan.md`
