@@ -49,9 +49,18 @@ omo-harness-skills/
 └── oh-my-opencode.json         # OMO 配置
 ```
 
+## 前置要求
+
+- [OpenCode](https://github.com/opencode-ai/opencode) — 终端 AI 编程工具
+- [OhMyOpenCode (OMO)](https://github.com/anthropics/oh-my-opencode) — OpenCode 增强框架
+- Node.js ≥ 18（OMO 运行环境）
+- Bash + Python3（安装脚本依赖）
+
 ## 快速开始
 
 ### 安装
+
+#### 方式一：一键安装（推荐）
 
 ```bash
 git clone git@github.com:ylx134/OMO-harness-agent.git
@@ -63,15 +72,39 @@ cd OMO-harness-agent
 1. 将 7 个技能目录软链接到 `~/.config/opencode/skills/`
 2. 合并 `oh-my-opencode.json` 配置（追加不覆盖）
 
+#### 方式二：手动安装
+
+```bash
+# 1. 克隆仓库
+git clone git@github.com:ylx134/OMO-harness-agent.git
+cd OMO-harness-agent
+
+# 2. 创建技能链接
+SKILLS_DIR="$HOME/.config/opencode/skills"
+mkdir -p "$SKILLS_DIR"
+for skill in control drive check plan memory feature-planner capability-planner; do
+  ln -sf "$(pwd)/$skill" "$SKILLS_DIR/$skill"
+done
+
+# 3. 合并配置（追加 categories，不覆盖已有配置）
+python3 -c "
+import json
+config_path = '$HOME/.config/opencode/oh-my-opencode.json'
+new_path = './oh-my-opencode.json'
+config = json.load(open(config_path)) if __import__('os').path.exists(config_path) else {}
+new_cfg = json.load(open(new_path))
+config.setdefault('categories', {}).update(new_cfg.get('categories', {}))
+config['model_fallback'] = new_cfg.get('model_fallback', True)
+config.setdefault('experimental', {}).update(new_cfg.get('experimental', {}))
+json.dump(config, open(config_path, 'w'), indent=2)
+"
+```
+
 ### 卸载
 
 ```bash
 ./uninstall.sh
 ```
-
-`uninstall.sh` 会自动：
-1. 移除所有技能软链接
-2. 清理本技能添加的配置项（保留你自己的配置）
 
 ### 使用
 
@@ -84,6 +117,55 @@ ulw 帮我重构 auth 模块，确保不影响现有功能
 
 # 简单修改 / 问答 / 单行改动
 直接跟 Sisyphus 说即可
+```
+
+## Auto-Pilot 工作流
+
+```
+用户请求
+  │
+  ▼
+┌─────────────────────────────────────────┐
+│  Task Router Gate                       │
+│  判断：简单 → Sisyphus 直接执行          │
+│        复杂 → 启动完整 Harness 流程      │
+└──────────────────┬──────────────────────┘
+                   │
+                   ▼
+┌─────────────────────────────────────────┐
+│  Phase 1: 规划                           │
+│  Prometheus / Planner 产出：             │
+│  - product-spec.md                      │
+│  - features.json (功能列表)              │
+│  - task.md (完成标准)                    │
+└──────────────────┬──────────────────────┘
+                   │
+                   ▼
+┌─────────────────────────────────────────┐
+│  Phase 2: Auto-Pilot 循环               │
+│                                         │
+│  for each feature in features.json:     │
+│    1. Executor 起草 Sprint Contract     │
+│    2. Checker 审查合同 ←→ 协商          │
+│    3. Executor 执行（合同批准后）        │
+│    4. Executor 自我评估                 │
+│    5. Checker 独立验收                  │
+│       - 4 维度评分                      │
+│       - calibration 校准                │
+│       - evidence 验证                   │
+│    6. accepted → 下一个 feature         │
+│       rejected → 重试（最多 3 次）      │
+│       blocked → 标记，继续下一个        │
+└──────────────────┬──────────────────────┘
+                   │
+                   ▼
+┌─────────────────────────────────────────┐
+│  Phase 3: 最终验收                       │
+│  - 全产品 4 维度评分                     │
+│  - 生成验收报告                          │
+│  - 通过 → 完成                           │
+│  - 不通过 → 列出待改进项                 │
+└─────────────────────────────────────────┘
 ```
 
 ## 三种模式对比
@@ -148,6 +230,126 @@ Codex: category="deep" → gpt-5.4 (单一模型)
 - [x] **Phase 2**: Hook 集成（48 builtin hooks active, 自定义冗余已移除）
 - [x] **Phase 3**: 高级优化（动态质量门禁、自动错误恢复、多代理协调、性能监控）
 - [x] **Phase 4**: 验证与迭代（评估框架、简化检查清单）
+
+## 状态文件说明
+
+`.agent-memory/` 是 Harness 的状态存储目录，每个文件有明确职责：
+
+| 文件 | 作用 | 写入者 |
+|------|------|--------|
+| `task.md` | 全局任务目标和完成标准 | Planner |
+| `features.json` | 功能列表（不可变合同） | Feature-Planner |
+| `working-memory.md` | 当前阶段执行状态 | Control |
+| `round-contract.md` | 当前轮次的执行合同 | Executor |
+| `execution-status.md` | 进度面板 | Executor |
+| `evidence-ledger.md` | 证据映射表 | Executor |
+| `acceptance-report.md` | 验收决策 | Checker |
+| `quality-guardrails.md` | 动态质量规则 | Checker |
+| `orchestration-status.md` | 路由状态和代理信息 | Control |
+| `state-index.json` | 机器可读索引（供 Hooks 读取） | Control |
+| `activity.jsonl` | 事件日志（追加写入） | All |
+| `handoff.md` | 跨会话交接文档 | Control |
+| `inbox/` | 新请求队列 | Control |
+
+## 配置参考
+
+### 自定义模型
+
+编辑 `~/.config/opencode/oh-my-opencode.json` 中的 `categories`：
+
+```json
+{
+  "categories": {
+    "deep": {
+      "description": "Planning and complex execution tasks",
+      "model": "your-model-name"
+    },
+    "quick": {
+      "description": "Acceptance checks and lightweight verification",
+      "model": "your-fast-model-name"
+    },
+    "ultrabrain": {
+      "description": "Capability planning requiring deep reasoning",
+      "model": "your-reasoning-model-name",
+      "reasoningEffort": "xhigh"
+    }
+  }
+}
+```
+
+不填 `model` 字段时，OMO 会使用 OpenCode 默认配置的模型。
+
+### 调整质量阈值
+
+编辑 `check/references/scoring-framework.md` 中的硬阈值：
+
+| 维度 | 默认阈值 | 建议调整场景 |
+|------|---------|-------------|
+| 产品深度 | ≥7/10 | 产品型任务可提高到 ≥8 |
+| 功能完整性 | ≥8/10 | 核心功能可提高到 ≥9 |
+| 视觉设计 | ≥6/10 | UI 密集型可提高到 ≥7 |
+| 代码质量 | ≥7/10 | 基础设施可提高到 ≥8 |
+
+### 调整错误恢复策略
+
+编辑 `control/config/error-handling.json`：
+
+```json
+{
+  "agent_failures": {
+    "executor": {
+      "max_retries": 2,
+      "failure_conditions": [...]
+    }
+  }
+}
+```
+
+## 常见问题 (FAQ)
+
+### Q: 安装脚本安全吗？做了什么？
+
+`setup.sh` 只做两件事：
+1. 创建软链接（不复制文件，不修改源码）
+2. 合并 JSON 配置（追加不覆盖，不删除已有配置）
+
+你可以先 `cat setup.sh` 审查后再运行。
+
+### Q: 和 OMO 自带的 agent 有什么区别？
+
+OMO 提供通用的 agent 系统（Sisyphus、Prometheus、Hephaestus 等），而 Harness 是在此之上构建的**工程化流程**——它定义了什么时候用哪个 agent、怎么协调、怎么验收、怎么恢复。可以理解为 OMO 是"工具"，Harness 是"流水线"。
+
+### Q: 可以在 Codex 上使用吗？
+
+可以。所有技能文件（`.md`）都是跨平台设计的。`oh-my-opencode.json` 和 Hooks 是 OMO 特有的，在 Codex 上忽略即可。
+
+### Q: Auto-Pilot 中途断了怎么办？
+
+所有状态都持久化在 `.agent-memory/` 中。重新运行 `/control 继续这个项目`，Control 会读取 `orchestration-status.md` 和 `features.json`，从上次中断的地方继续。
+
+### Q: 怎么自定义验收标准？
+
+在 `features.json` 中为每个功能定义 `verification_method` 和 `verification_steps`。Checker 会严格按照这些标准进行验收。
+
+### Q: 如何贡献代码？
+
+欢迎提交 Issue 和 Pull Request！详见下方的 Contributing 部分。
+
+## Contributing
+
+欢迎贡献！
+
+1. Fork 本仓库
+2. 创建特性分支 (`git checkout -b feature/amazing-skill`)
+3. 提交更改 (`git commit -m 'Add amazing skill'`)
+4. 推送到分支 (`git push origin feature/amazing-skill`)
+5. 提交 Pull Request
+
+### 开发规范
+
+- 新增技能：参考现有技能的结构（`SKILL.md` + `references/` + `templates/`）
+- 修改配置：确保向后兼容，不破坏已有用户的配置
+- 提交信息：使用 [Conventional Commits](https://www.conventionalcommits.org/) 格式
 
 ## 设计灵感
 
