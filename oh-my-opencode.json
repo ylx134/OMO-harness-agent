@@ -1,16 +1,13 @@
 {
   "categories": {
     "deep": {
-      "description": "Planning and complex execution tasks",
-      "model": "[REDACTED]"
+      "description": "Planning and complex execution tasks"
     },
     "quick": {
-      "description": "Acceptance checks and lightweight verification",
-      "model": "[REDACTED]"
+      "description": "Acceptance checks and lightweight verification"
     },
     "ultrabrain": {
       "description": "Capability planning requiring deep reasoning",
-      "model": "[REDACTED]",
       "reasoningEffort": "xhigh"
     }
   },

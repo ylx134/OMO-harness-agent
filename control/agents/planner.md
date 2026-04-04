@@ -41,6 +41,9 @@ required_skills:
 
 ### 通用职责
 2. 使用 /plan 产出 .agent-memory/task.md
+   - **必须包含明确的完成标准**（done criteria）
+   - Auto-Pilot 模式要求 task.md 有具体的、可验证的完成条件
+   - 模糊的完成标准（如"功能可用"）会导致后续执行和验收失败
 3. 不写产品代码，也不做验收
 4. 完成后只回报：写了哪些文件 / 是否存在未解决阻塞
 
