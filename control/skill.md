@@ -1,6 +1,6 @@
 ---
 name: control
-description: Use when a long-running or multi-phase project should be handled from one main thread while planning, execution, memory, and acceptance are coordinated through shared files and fresh subagents. Supports AUTO-PILOT MODE for fully autonomous execution.
+description: Use when a long-running or multi-phase project should be handled from one main thread while planning, execution, memory, and acceptance are coordinated through shared files and fresh subagents. Supports AUTO-PILOT MODE for fully autonomous execution. Includes a Task Router Gate that automatically decides whether to use Control or delegate to Sisyphus directly.
 ---
 
 # Control
@@ -12,6 +12,53 @@ Run a long project from one main thread. The user should not have to manually co
 This skill is the conductor that coordinates all other skills to achieve complete autonomous execution.
 
 Agent prompts are defined in `agents/` (planner.md, executor.md, checker.md) and rendered with `{{variable}}` substitution before dispatch. Routing rules live in `config/routing-table.json`. Error handling policies live in `config/error-handling.json`.
+
+## Task Router Gate (自动决策)
+
+**CRITICAL**: Before doing anything, Control MUST run the Task Router Gate to decide whether to use the full harness or delegate to Sisyphus directly.
+
+### Step 1: Classify the Request
+
+Evaluate the user's request against these criteria:
+
+| Criterion | Sisyphus (direct) | Control (harness) |
+|-----------|-------------------|-------------------|
+| Files to change | 1-2 files | 3+ files |
+| Planning needed | No — scope is clear | Yes — impact unclear |
+| Acceptance needed | No — trivial to verify | Yes — quality matters |
+| Interruption risk | Low — one session | High — may span sessions |
+| User said "ulw" | Yes — wants ultrathink mode | No — wants autonomous |
+| User said "/control" | No | Yes — explicitly requested |
+
+### Step 2: Decision Rules
+
+**Route to Sisyphus (direct execution, no harness) when ANY of these are true:**
+- Request is purely informational ("explain X", "what does Y do")
+- Request is a single-line change ("add console.log", "change config value")
+- Request is a code review ("look at this code, any issues?")
+- Request is a file operation ("create directory", "rename file")
+- Request is a quick prototype ("just write a demo")
+- User explicitly said "ulw" (wants ultrathink mode, not autonomous harness)
+
+**Route to Control (full harness) when ANY of these are true:**
+- User explicitly said "/control"
+- Request involves building a new feature or capability
+- Request involves refactoring a module with unclear impact
+- Request involves building a product from scratch
+- Request involves long-running work that may span multiple sessions
+- Request involves quality-critical work (needs independent acceptance)
+
+### Step 3: Execute Decision
+
+**If routed to Sisyphus:**
+- Do NOT initialize `.agent-memory/`
+- Do NOT launch planner/executor/checker
+- Execute directly using Sisyphus's own capabilities
+- Tell the user: "This is a simple task — executing directly without harness overhead."
+
+**If routed to Control:**
+- Proceed with the full harness workflow (Semantic Lock Gate → Task Typing → Auto-Pilot or manual rounds)
+- If the request was borderline and user didn't explicitly request harness, briefly explain why: "This involves 3+ files and quality-critical changes — using the full harness for planning, execution, and independent acceptance."
 
 ## Semantic Lock Gate
 
@@ -314,8 +361,12 @@ Auto-pilot is a `重流程` mode only. Activates when ALL of these are true:
 T=0:   User request
 T=2m:  Task Typing → record in orchestration-status.md
 T=5m:  Initialize .agent-memory/ via /memory
-T=10m: Launch planner + checker via task()
-T=15m: Planner runs /feature-planner + /plan → writes product-spec.md, features.json, task.md
+T=10m: Launch planner via task(category="deep", load_skills=["plan"])
+       NOTE: If using OMO, prefer Prometheus for planning:
+       task(subagent_type="prometheus", run_in_background=true)
+       Prometheus will interview → plan → Momus review → output:
+       - product-spec.md, features.json, features-summary.md, task.md
+T=15m: If Prometheus not available, fall back to planner agent + /feature-planner + /plan
 T=20m: Auto-Pilot loop begins
 
 Loop for each feature (sorted by priority and dependencies):

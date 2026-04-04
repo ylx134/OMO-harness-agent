@@ -87,6 +87,26 @@ ln -s /Users/tianyuan/Documents/my_workspace/omo-harness-skills/feature-planner 
 ln -s /Users/tianyuan/Documents/my_workspace/omo-harness-skills/capability-planner ~/.config/opencode/skills/capability-planner
 ```
 
+## 使用指南
+
+### 三种模式选择
+
+| 场景 | 用什么 | 原因 |
+|------|--------|------|
+| 改 bug / 单行修改 / 纯问答 | 直接跟 Sisyphus 说 | 无编排开销，最快 |
+| 复杂分析 / 重构 / 深度研究 | `ulw` | 强制深度思考 + 严格验证 |
+| 新功能 / 产品构建 / 长期项目 | `/control` | 规划→执行→验收完整流程 |
+
+### Control 内置自动决策
+
+Control 内置了 **Task Router Gate**，会自动判断任务是否值得使用 harness：
+- 任务太简单 → Control 委托给 Sisyphus 直接执行
+- 任务适合 harness → Control 启动完整流程
+
+所以**不确定时用 `/control` 是安全选择**——Control 会自己决定要不要用 harness。
+
+详见 `control/references/decision-tree.md`。
+
 ## 路由表
 
 | 任务类型 | Category | 技能栈 | 流程 |
