@@ -1,7 +1,9 @@
 # Universal Scoring Framework
 
 A unified 4-dimension scoring framework for all acceptance decisions.
-Applies to every sprint/round regardless of work type.
+The default weights and thresholds below apply to `产品型` tasks. For other task types,
+use the per-route `scoring_config` from `control/config/routing-table.json` to override
+weights and thresholds. See "Task-Type Weight Overrides" section below.
 
 ## The 4 Dimensions
 
@@ -97,6 +99,57 @@ Final Score = (产品深度 × 0.30) + (功能完整性 × 0.30) + (视觉设计
    - All thresholds met AND final score ≥ 7.0 → eligible for acceptance
    - Any threshold failed → REJECTED with specific dimension feedback
    - Final score < 7.0 but thresholds met → NEEDS-FOLLOW-UP (borderline)
+
+## Task-Type Weight Overrides
+
+The default weights (30/30/20/20) and thresholds are designed for `产品型` tasks with significant
+UI surface. Other task types use adjusted weights from `routing-table.json → scoring_config`.
+
+**Rationale**: Backend-only, capability, and fix tasks should not be penalized by the visual design
+dimension. The weights shift emphasis to functional completeness and code quality for non-visual work.
+
+### Override Table
+
+| Task Type | 产品深度 | 功能完整性 | 视觉设计 | 代码质量 | 视觉阈值 | Rubric |
+|-----------|---------|-----------|---------|---------|---------|--------|
+| 产品型 (P-H1) | 30% | 30% | 20% | 20% | ≥6 | frontend-design.md |
+| 改造型 (C-M1) | 25% | 35% | 10% | 30% | ≥4 | backend-logic.md |
+| 能力型 (A-M1) | 30% | 35% | 5% | 30% | ≥3 | backend-logic.md |
+| 修复型 (F-M1) | 20% | 40% | 5% | 35% | ≥3 | backend-logic.md |
+| 判断型 (J-L1) | — | — | — | — | — | N/A (not scored) |
+
+### How to Apply Overrides
+
+1. Read the current route's `scoring_config` from `routing-table.json`
+2. If `scoring_config` is `null` (判断型): skip numeric scoring, use qualitative judgment only
+3. If `scoring_config` exists: use its `weights` and `thresholds` instead of the defaults above
+4. Apply the `required_rubric` from `scoring_config` for dimension-specific guidance
+5. The `pass_score` field (default 7.0) determines the final weighted score threshold
+
+### Override Formula
+
+When `scoring_config` is present:
+```
+Final Score = (产品深度 × weights.产品深度) + (功能完整性 × weights.功能完整性)
+            + (视觉设计 × weights.视觉设计) + (代码质量 × weights.代码质量)
+```
+
+**Pass/Fail Rule with overrides**:
+- ALL individual dimensions must meet their per-route threshold (from `scoring_config.thresholds`)
+- AND final score must be ≥ `scoring_config.pass_score`
+- If ANY dimension fails its per-route threshold → REJECTED
+
+### Example: Capability Task (A-M1 route)
+
+Using override weights (30/35/5/30) and thresholds (7/8/3/7):
+- 产品深度: 8/10 (deep rule engine implementation)
+- 功能完整性: 9/10 (all edge cases handled)
+- 视觉设计: 4/10 (CLI only, no UI — still passes ≥3 threshold)
+- 代码质量: 8/10 (well-structured with tests)
+- Final: (8×0.30) + (9×0.35) + (4×0.05) + (8×0.30) = 2.4 + 3.15 + 0.2 + 2.4 = **8.15** → PASS
+
+Without overrides this task would fail: (8×0.3) + (9×0.3) + (4×0.2) + (8×0.2) = 7.5 but
+视觉设计 4/10 < threshold 6 → would be REJECTED despite excellent backend work.
 
 ## Examples
 

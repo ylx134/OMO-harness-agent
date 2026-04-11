@@ -141,5 +141,29 @@
     "consecutive_failures_threshold": 5,
     "time_limit_hours": 12,
     "escalation_message_template": "Auto-pilot interrupted: {reason}. {blocked_count} features blocked, {completed_count}/{total_count} completed. Last error: {last_error}. Please advise."
+  },
+  "contract_negotiation": {
+    "max_rounds": 3,
+    "timeout_minutes": 15,
+    "failure_conditions": [
+      {
+        "condition": "max_rounds_exceeded",
+        "description": "Executor and checker could not agree on contract after max negotiation rounds",
+        "action": "escalate_to_user",
+        "context": "Include latest contract draft and checker's rejection reason"
+      },
+      {
+        "condition": "timeout",
+        "description": "No progress on contract negotiation within timeout period",
+        "threshold_minutes": 15,
+        "action": "escalate_to_user"
+      },
+      {
+        "condition": "missing_required_fields",
+        "description": "Contract draft is missing required fields (goal, checklist, pass conditions, evidence types)",
+        "action": "reject_and_retry",
+        "escalation": "Executor must rewrite with all required fields before checker reviews"
+      }
+    ]
   }
 }

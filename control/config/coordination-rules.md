@@ -105,3 +105,62 @@ Executor and checker must not create circular dependencies:
 - Executor must NOT wait for checker feedback during execution (only before, during contract negotiation)
 - Checker must NOT request executor changes during acceptance (only report rejection)
 - All communication goes through files, not through direct interaction
+
+## Contract Negotiation Protocol
+
+### Turn-Taking Rules
+The contract negotiation phase follows strict turn-taking between executor and checker:
+
+1. **Executor drafts**: writes `round-contract.md` with specific testable criteria
+2. **Control updates**: sets `Expected Next Writer: checker` in `orchestration-status.md`
+3. **Checker reviews**: reads contract, writes approval/rejection into `round-contract.md`
+4. **Control updates**: sets `Expected Next Writer: executor` if revision needed
+5. **Maximum 3 negotiation rounds** before escalating to user
+
+### Required Contract Fields
+Before marking a contract as ready-for-review, it must contain:
+- Round goal (what this round will accomplish)
+- Checklist items (3-7 specific, testable items)
+- Pass conditions for each item
+- Required evidence types
+- Files in scope
+- Runnable entry package (startup, main path, error path)
+
+### Timeout
+If no progress on contract negotiation for 15 minutes, control escalates to user.
+See `error-handling.json → contract_negotiation` for configuration.
+
+## Degraded Mode Coordination
+
+When running in `降级模式` (single-thread), the coordination rules are simplified:
+
+### What Changes
+- **No parallel execution**: All roles execute sequentially in one thread
+- **No Expected Next Writer check**: The single agent transitions between roles explicitly
+- **Contract negotiation skipped**: Agent writes contract and self-reviews against task.md criteria
+- **File ownership self-enforced**: Agent respects role boundaries by phase, not by agent ID
+
+### What Stays the Same
+- **File roles**: Each file still has a defined purpose and budget
+- **Append-only rules**: `activity.jsonl` and `journal.md` remain append-only
+- **State machine phases**: planning → execution → acceptance → decision flow is preserved
+- **Git checkpoint discipline**: Commits at round boundaries still required
+
+### Degraded Mode State Machine
+```
+planning → execution → self-acceptance → decision
+    ↑                                       ↓
+    └──────── retry (if self-rejected) ─────┘
+```
+
+### Role Transition Markers
+When switching roles in degraded mode, write a transition marker to `orchestration-status.md`:
+```
+## Role Transition
+Previous Role: executor
+Current Role: checker
+Phase: acceptance
+Timestamp: {ISO-8601}
+Reason: round implementation complete, entering self-acceptance
+```
+

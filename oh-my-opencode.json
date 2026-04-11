@@ -9,6 +9,10 @@
     "ultrabrain": {
       "description": "Capability planning requiring deep reasoning",
       "reasoningEffort": "xhigh"
+    },
+    "visual-engineering": {
+      "description": "Product-grade multi-round execution with visual verification",
+      "reasoningEffort": "high"
     }
   },
   "model_fallback": true,

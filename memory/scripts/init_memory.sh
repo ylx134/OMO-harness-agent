@@ -71,6 +71,26 @@ EOF
   echo "[ok] created $progress_file"
 fi
 
+state_index_file="$memory_dir/state-index.json"
+if [[ -f "$state_index_file" ]]; then
+  echo "[skip] $state_index_file already exists"
+else
+  cat > "$state_index_file" <<'SIDX'
+{
+  "task_type": "",
+  "flow_tier": "",
+  "route_id": "",
+  "current_phase": "planning",
+  "current_round": 0,
+  "features_completed": 0,
+  "features_total": 0,
+  "blockers_count": 0,
+  "last_updated": ""
+}
+SIDX
+  echo "[ok] created $state_index_file"
+fi
+
 activity_file="$memory_dir/activity.jsonl"
 if [[ -f "$activity_file" ]]; then
   echo "[skip] $activity_file already exists"

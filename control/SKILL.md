@@ -164,6 +164,45 @@ When you catch yourself using these phrases:
 
 Single-thread role-playing is only allowed in `降级模式`, and only when subagent launch failed or the user explicitly asked to avoid subagents. If `降级模式` is used, record it in `.agent-memory/orchestration-status.md` and tell the user.
 
+### Degraded Mode (降级模式)
+
+**Purpose**: Allow the harness to work in environments where `task()` is unavailable (e.g., vanilla Claude Code, Codex, non-OMO setups).
+
+**Activation**: Degraded mode activates automatically when ANY of these are true:
+- `task()` call fails or is unavailable
+- User explicitly requests single-thread mode
+- Environment detection shows non-OMO platform
+
+**Behavioral Differences in Degraded Mode**:
+
+| Aspect | Multi-Agent Mode | Degraded Mode |
+|--------|-----------------|---------------|
+| Role execution | Separate subagents | Same agent plays all roles sequentially |
+| Contract negotiation | Executor↔Checker turn-taking | Skipped (same agent writes and reviews) |
+| Parallel execution | Possible | Not possible |
+| orchestration-status.md | Full (agent IDs, Expected Next Writer) | Simplified (current role, current phase only) |
+| File ownership | Enforced per-agent | Self-enforced per-role-phase |
+| State management | Unchanged | Unchanged |
+| Scoring framework | Unchanged | Unchanged |
+| Quality guardrails | Unchanged | Unchanged |
+| Git checkpoint | Unchanged | Unchanged |
+
+**Degraded Mode Workflow**:
+1. Control reads `config/routing-table.json`, checks `execution_mode.single_thread_allowed` for the selected route
+2. If `single_thread_allowed: false` (e.g., P-H1): warn user that product-type tasks require multi-agent mode, offer to downgrade to `改造型` route
+3. If `single_thread_allowed: true`: proceed with sequential role execution
+4. Execute roles in order: planner phase → executor phase → checker phase
+5. Between role switches, explicitly write a role-transition marker to `orchestration-status.md`
+6. Self-assessment replaces contract negotiation: executor writes contract, immediately reviews it against the task.md criteria before proceeding
+
+**Recording**:
+```
+## Execution Mode
+Mode: 降级模式 (single-thread)
+Reason: task() unavailable | user requested | non-OMO environment
+Activated: {timestamp}
+```
+
 ### Multi-Agent Coordination
 
 See `config/coordination-rules.md` for the complete file ownership model, state machine, and deadlock prevention rules.

@@ -38,6 +38,7 @@ Agent Launch Policy: {persistent-planner-checker + per-round-executor}
 Current Routing Step: {e.g., drive-complete -> check-pending}
 Last Formal Writer: {planner | drive | check | control}
 Expected Next Writer: {planner | drive | check | control}
+Negotiation Round: 0
 
 ## Handoff State
 

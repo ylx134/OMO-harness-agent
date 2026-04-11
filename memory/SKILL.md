@@ -358,7 +358,7 @@ The new thread should read `handoff.md` first, then `task.md`, then `working-mem
 1. 生成 handoff.md（完整的状态快照）
 2. git commit 当前所有工作
 3. 记录 activity.jsonl 事件：
-   {"ts": "...", "event": "context_reset", "reason": "...", "agent": "..."}
+   {"time": "...", "event_type": "context_reset", "reason": "...", "agent": "..."}
 4. 启动全新 agent 会话
 5. 新 agent 的启动序列：
    a. 读取 handoff.md（首要）
@@ -451,13 +451,13 @@ Context Reset 生成的 handoff.md 必须包含：
 ### 事件格式
 每行一个 JSON 对象，追加写入：
 ```jsonl
-{"ts": "2026-04-03T10:30:00Z", "event": "agent_spawned", "type": "planner", "id": "agent-abc"}
-{"ts": "2026-04-03T10:35:00Z", "event": "skill_invoked", "skill": "feature-planner", "agent": "agent-abc"}
-{"ts": "2026-04-03T10:40:00Z", "event": "file_written", "file": "product-spec.md", "agent": "agent-abc"}
-{"ts": "2026-04-03T10:45:00Z", "event": "agent_completed", "type": "planner", "id": "agent-abc", "status": "success"}
-{"ts": "2026-04-03T10:45:01Z", "event": "state_index_updated", "route_id": "P-H1", "round": 3}
-{"ts": "2026-04-03T10:50:00Z", "event": "git_commit", "message": "feat: F001", "agent": "executor"}
-{"ts": "2026-04-03T10:55:00Z", "event": "acceptance_completed", "decision": "accepted", "round": 1}
+{"time": "2026-04-03T10:30:00Z", "event_type": "agent_spawned", "type": "planner", "id": "agent-abc"}
+{"time": "2026-04-03T10:35:00Z", "event_type": "skill_invoked", "skill": "feature-planner", "agent": "agent-abc"}
+{"time": "2026-04-03T10:40:00Z", "event_type": "file_written", "file": "product-spec.md", "agent": "agent-abc"}
+{"time": "2026-04-03T10:45:00Z", "event_type": "agent_completed", "type": "planner", "id": "agent-abc", "status": "success"}
+{"time": "2026-04-03T10:45:01Z", "event_type": "state_index_updated", "route_id": "P-H1", "round": 3}
+{"time": "2026-04-03T10:50:00Z", "event_type": "git_commit", "message": "feat: F001", "agent": "executor"}
+{"time": "2026-04-03T10:55:00Z", "event_type": "acceptance_completed", "decision": "accepted", "round": 1}
 ```
 
 ### 事件类型

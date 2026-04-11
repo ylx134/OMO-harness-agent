@@ -19,7 +19,7 @@
     },
     "current_phase": {
       "type": "string",
-      "enum": ["planning", "execution", "acceptance", "complete"]
+      "enum": ["planning", "contract-negotiation", "execution", "acceptance", "complete"]
     },
     "current_round": {
       "type": "integer",

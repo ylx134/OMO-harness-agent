@@ -7,15 +7,23 @@
 export default {
   name: "evidence-verifier",
   description: "Verify evidence files exist before allowing acceptance report writes",
-  match: "Edit",
-  handler: async ({ input }) => {
+  match: ["Edit", "Write"],
+  handler: async ({ input, toolName }) => {
     try {
       if (!input.file_path || !input.file_path.includes('acceptance-report.md')) {
         return { continue: true, suppressOutput: true };
       }
 
+      // Derive workspace root from acceptance-report.md path
+      // Expected: <workspace>/.agent-memory/acceptance-report.md
+      const memoryIdx = input.file_path.lastIndexOf('.agent-memory');
+      const workspaceRoot = memoryIdx > 0
+        ? input.file_path.substring(0, memoryIdx)
+        : '';
+
       const evidencePattern = /evidence\/[^\s)]+/g;
-      const newContent = input.new_string || '';
+      // For Write: check content field; for Edit: check new_string field
+      const newContent = toolName === 'Write' ? (input.content || '') : (input.new_string || '');
       const matches = newContent.match(evidencePattern) || [];
 
       if (matches.length === 0) {
@@ -23,11 +31,12 @@ export default {
       }
 
       const missing = [];
-      for (const path of matches) {
+      for (const relPath of matches) {
+        const absPath = workspaceRoot ? `${workspaceRoot}${relPath}` : relPath;
         try {
-          await Deno.stat(path);
+          await Deno.stat(absPath);
         } catch {
-          missing.push(path);
+          missing.push(relPath);
         }
       }
 

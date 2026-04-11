@@ -1,27 +1,22 @@
 {
   "判断型": {
     "description": "understand, compare, review, audit, explain, or decide",
-    "omo_category": "quick",
     "default_flow_tier": "轻流程"
   },
   "修复型": {
     "description": "fix a bug, regression, broken workflow, or broken test",
-    "omo_category": "deep",
     "default_flow_tier": "中流程"
   },
   "改造型": {
     "description": "add or change a focused capability inside an existing project",
-    "omo_category": "deep",
     "default_flow_tier": "中流程"
   },
   "能力型": {
     "description": "make the system truly able to do something deeper, less visible, or more rule-heavy",
-    "omo_category": "ultrabrain",
     "default_flow_tier": "中流程"
   },
   "产品型": {
     "description": "expand, build, or reshape a larger product or subsystem",
-    "omo_category": "visual-engineering",
     "default_flow_tier": "重流程"
   }
 }

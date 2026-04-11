@@ -7,7 +7,13 @@
       "skill_stack": ["check"],
       "startup_files": ["task.md"],
       "deliverables": ["answer", "acceptance-report.md"],
-      "anti_shallow_bar": "do not pretend a decision task is complete just because a guess sounds plausible"
+      "anti_shallow_bar": "do not pretend a decision task is complete just because a guess sounds plausible",
+      "execution_mode": {
+        "multi_agent": false,
+        "single_thread_allowed": true,
+        "requires_contract_negotiation": false
+      },
+      "scoring_config": null
     },
     "F-M1": {
       "task_type": "修复型",
@@ -16,7 +22,18 @@
       "skill_stack": ["drive", "check"],
       "startup_files": ["task.md", "working-memory.md", "round-contract.md", "orchestration-status.md"],
       "deliverables": ["round-contract.md", "execution-status.md", "evidence-ledger.md", "acceptance-report.md"],
-      "anti_shallow_bar": "main failure path and one nearby regression check are both required"
+      "anti_shallow_bar": "main failure path and one nearby regression check are both required",
+      "execution_mode": {
+        "multi_agent": true,
+        "single_thread_allowed": true,
+        "requires_contract_negotiation": true
+      },
+      "scoring_config": {
+        "weights": { "产品深度": 0.20, "功能完整性": 0.40, "视觉设计": 0.05, "代码质量": 0.35 },
+        "thresholds": { "产品深度": 7, "功能完整性": 8, "视觉设计": 3, "代码质量": 7 },
+        "required_rubric": "backend-logic.md",
+        "pass_score": 7.0
+      }
     },
     "C-M1": {
       "task_type": "改造型",
@@ -25,7 +42,18 @@
       "skill_stack": ["plan", "drive", "check"],
       "startup_files": ["task.md", "capability-map.md", "gap-analysis.md", "working-memory.md", "round-contract.md", "orchestration-status.md"],
       "deliverables": ["task.md", "round-contract.md", "execution-status.md", "evidence-ledger.md", "acceptance-report.md"],
-      "anti_shallow_bar": "do not count visible output alone as progress; the named gap must shrink"
+      "anti_shallow_bar": "do not count visible output alone as progress; the named gap must shrink",
+      "execution_mode": {
+        "multi_agent": true,
+        "single_thread_allowed": true,
+        "requires_contract_negotiation": true
+      },
+      "scoring_config": {
+        "weights": { "产品深度": 0.25, "功能完整性": 0.35, "视觉设计": 0.10, "代码质量": 0.30 },
+        "thresholds": { "产品深度": 7, "功能完整性": 8, "视觉设计": 4, "代码质量": 7 },
+        "required_rubric": "refactoring.md",
+        "pass_score": 7.0
+      }
     },
     "A-M1": {
       "task_type": "能力型",
@@ -34,7 +62,18 @@
       "skill_stack": ["capability-planner", "plan", "drive", "check"],
       "startup_files": ["task.md", "baseline-source.md", "capability-map.md", "gap-analysis.md", "quality-guardrails.md", "working-memory.md", "round-contract.md", "orchestration-status.md"],
       "deliverables": ["baseline-source.md", "capability-map.md", "gap-analysis.md", "task.md", "round-contract.md", "execution-status.md", "evidence-ledger.md", "acceptance-report.md"],
-      "anti_shallow_bar": "do not accept a shell that only looks complete; hidden rule or deeper ability must be proved"
+      "anti_shallow_bar": "do not accept a shell that only looks complete; hidden rule or deeper ability must be proved",
+      "execution_mode": {
+        "multi_agent": true,
+        "single_thread_allowed": true,
+        "requires_contract_negotiation": true
+      },
+      "scoring_config": {
+        "weights": { "产品深度": 0.30, "功能完整性": 0.35, "视觉设计": 0.05, "代码质量": 0.30 },
+        "thresholds": { "产品深度": 7, "功能完整性": 8, "视觉设计": 3, "代码质量": 7 },
+        "required_rubric": "backend-logic.md",
+        "pass_score": 7.0
+      }
     },
     "P-H1": {
       "task_type": "产品型",
@@ -43,7 +82,18 @@
       "skill_stack": ["feature-planner", "plan", "drive", "check"],
       "startup_files": ["task.md", "product-spec.md", "features.json", "features-summary.md", "baseline-source.md", "gap-analysis.md", "working-memory.md", "round-contract.md", "orchestration-status.md"],
       "deliverables": ["product-spec.md", "features.json", "features-summary.md", "task.md", "round-contract.md", "execution-status.md", "evidence-ledger.md", "acceptance-report.md"],
-      "anti_shallow_bar": "do not accept minimum-only slices when the product promise or release bar says fuller depth is required"
+      "anti_shallow_bar": "do not accept minimum-only slices when the product promise or release bar says fuller depth is required",
+      "execution_mode": {
+        "multi_agent": true,
+        "single_thread_allowed": false,
+        "requires_contract_negotiation": true
+      },
+      "scoring_config": {
+        "weights": { "产品深度": 0.30, "功能完整性": 0.30, "视觉设计": 0.20, "代码质量": 0.20 },
+        "thresholds": { "产品深度": 7, "功能完整性": 8, "视觉设计": 6, "代码质量": 7 },
+        "required_rubric": "frontend-design.md",
+        "pass_score": 7.0
+      }
     }
   },
   "category_mapping": {
