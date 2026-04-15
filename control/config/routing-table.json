@@ -25,7 +25,7 @@
       "anti_shallow_bar": "main failure path and one nearby regression check are both required",
       "execution_mode": {
         "multi_agent": true,
-        "single_thread_allowed": true,
+        "single_thread_allowed": false,
         "requires_contract_negotiation": true
       },
       "scoring_config": {
@@ -45,7 +45,7 @@
       "anti_shallow_bar": "do not count visible output alone as progress; the named gap must shrink",
       "execution_mode": {
         "multi_agent": true,
-        "single_thread_allowed": true,
+        "single_thread_allowed": false,
         "requires_contract_negotiation": true
       },
       "scoring_config": {
@@ -65,7 +65,7 @@
       "anti_shallow_bar": "do not accept a shell that only looks complete; hidden rule or deeper ability must be proved",
       "execution_mode": {
         "multi_agent": true,
-        "single_thread_allowed": true,
+        "single_thread_allowed": false,
         "requires_contract_negotiation": true
       },
       "scoring_config": {

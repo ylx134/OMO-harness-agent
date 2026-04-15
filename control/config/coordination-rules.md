@@ -132,13 +132,17 @@ See `error-handling.json → contract_negotiation` for configuration.
 
 ## Degraded Mode Coordination
 
-When running in `降级模式` (single-thread), the coordination rules are simplified:
+When running in `降级模式` (single-thread), the coordination rules are simplified.
+
+This section applies only to routes whose `execution_mode.single_thread_allowed` is `true` in `config/routing-table.json`. Routes `F-M1`, `C-M1`, `A-M1`, and `P-H1` are subagent-required and must not use this degraded sequential flow.
 
 ### What Changes
 - **No parallel execution**: All roles execute sequentially in one thread
 - **No Expected Next Writer check**: The single agent transitions between roles explicitly
 - **Contract negotiation skipped**: Agent writes contract and self-reviews against task.md criteria
 - **File ownership self-enforced**: Agent respects role boundaries by phase, not by agent ID
+
+If a selected route does not allow single-thread execution, control must record a route-blocking gap instead of entering this mode.
 
 ### What Stays the Same
 - **File roles**: Each file still has a defined purpose and budget
@@ -163,4 +167,3 @@ Phase: acceptance
 Timestamp: {ISO-8601}
 Reason: round implementation complete, entering self-acceptance
 ```
-

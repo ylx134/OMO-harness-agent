@@ -61,3 +61,10 @@ The live route packet in `.agent-memory/orchestration-status.md` must always rec
 - route blocking gaps
 
 If the route packet is incomplete, execution or acceptance must stop and tighten it first.
+
+## Execution Mode Policy
+
+- `J-L1` may run on the main thread or use `check` because it is not a harness multi-agent route.
+- `F-M1`, `C-M1`, `A-M1`, and `P-H1` are harness multi-agent routes and must not silently fall back to one-thread execution.
+- For any route whose `execution_mode.single_thread_allowed` is `false`, failed subagent launch is a route-blocking gap.
+- A route-blocking gap must be recorded in `.agent-memory/orchestration-status.md`; it is not permission to continue by role-playing planner, executor, and checker in one thread.
