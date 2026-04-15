@@ -48,6 +48,13 @@ Evaluate the user's request against these criteria:
 - Request involves long-running work that may span multiple sessions
 - Request involves quality-critical work (needs independent acceptance)
 
+**Treat the task as high-context harness work and require the multi-agent route when ANY of these are true:**
+- the work has 3+ meaningful phases or gates
+- the work spans 2+ work domains or responsibility areas
+- the work depends on preserving global constraints while many local details accumulate
+- the work is likely to cross sessions or require repeated re-reading of prior decisions
+- the work needs independent contract review or acceptance to stay honest
+
 ### Step 3: Execute Decision
 
 **If routed to Sisyphus:**
@@ -59,6 +66,7 @@ Evaluate the user's request against these criteria:
 **If routed to Control:**
 - Proceed with the full harness workflow (Semantic Lock Gate → Task Typing → Auto-Pilot or manual rounds)
 - If the request was borderline and user didn't explicitly request harness, briefly explain why: "This involves 3+ files and quality-critical changes — using the full harness for planning, execution, and independent acceptance."
+- If the selected route has `execution_mode.single_thread_allowed: false`, do not silently degrade into one-thread execution.
 
 ## Semantic Lock Gate
 
@@ -164,6 +172,8 @@ When you catch yourself using these phrases:
 
 Single-thread role-playing is only allowed in `降级模式`, and only when subagent launch failed or the user explicitly asked to avoid subagents. If `降级模式` is used, record it in `.agent-memory/orchestration-status.md` and tell the user.
 
+For any route whose `execution_mode.single_thread_allowed` is `false`, subagent launch is mandatory. If those subagents are unavailable, the route is blocked; control must not role-play planner, executor, and checker in one thread.
+
 ### Degraded Mode (降级模式)
 
 **Purpose**: Allow the harness to work in environments where `task()` is unavailable (e.g., vanilla Claude Code, Codex, non-OMO setups).
@@ -172,6 +182,8 @@ Single-thread role-playing is only allowed in `降级模式`, and only when suba
 - `task()` call fails or is unavailable
 - User explicitly requests single-thread mode
 - Environment detection shows non-OMO platform
+
+Degraded mode may only be entered when the selected route explicitly allows single-thread execution in `config/routing-table.json`.
 
 **Behavioral Differences in Degraded Mode**:
 
@@ -189,11 +201,13 @@ Single-thread role-playing is only allowed in `降级模式`, and only when suba
 
 **Degraded Mode Workflow**:
 1. Control reads `config/routing-table.json`, checks `execution_mode.single_thread_allowed` for the selected route
-2. If `single_thread_allowed: false` (e.g., P-H1): warn user that product-type tasks require multi-agent mode, offer to downgrade to `改造型` route
-3. If `single_thread_allowed: true`: proceed with sequential role execution
-4. Execute roles in order: planner phase → executor phase → checker phase
-5. Between role switches, explicitly write a role-transition marker to `orchestration-status.md`
-6. Self-assessment replaces contract negotiation: executor writes contract, immediately reviews it against the task.md criteria before proceeding
+2. If `single_thread_allowed: false`: do NOT enter degraded mode
+3. Record the missing-subagent condition in `.agent-memory/orchestration-status.md` as a route-blocking gap, keep agent states as `not-launched`, and tell the user the selected route requires subagents
+4. Stop that route until subagent availability is restored or the work is explicitly reclassified to a smaller route
+5. If `single_thread_allowed: true`: proceed with sequential role execution
+6. Execute roles in order: planner phase → executor phase → checker phase
+7. Between role switches, explicitly write a role-transition marker to `orchestration-status.md`
+8. Self-assessment replaces contract negotiation: executor writes contract, immediately reviews it against the task.md criteria before proceeding
 
 **Recording**:
 ```
