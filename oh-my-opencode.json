@@ -13,10 +13,31 @@
     "visual-engineering": {
       "description": "Product-grade multi-round execution with visual verification",
       "reasoningEffort": "high"
+    },
+    "manager-brain": {
+      "description": "Global orchestration and manager-level routing summaries",
+      "reasoningEffort": "high"
+    },
+    "capability-hands": {
+      "description": "Narrow capability-agent execution such as code, shell, docs, and evidence work"
+    },
+    "probe-verification": {
+      "description": "Probe-agent verification focused on UI, API, regression, and artifact evidence"
     }
   },
   "model_fallback": true,
   "experimental": {
     "preemptive_compaction": true
+  },
+  "hooks": {
+    "install_dir_hint": "~/.config/opencode/hooks",
+    "managed": [
+      "evidence-verifier.js",
+      "features-json-guard.js",
+      "manager-boundary-guard.js",
+      "summary-sync-guard.js",
+      "probe-evidence-guard.js",
+      "managed-route-completeness-guard.js"
+    ]
   }
 }

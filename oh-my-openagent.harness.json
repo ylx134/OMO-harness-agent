@@ -1,0 +1,38 @@
+{
+  "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/dev/assets/oh-my-opencode.schema.json",
+  "agents": {
+    "harness-orchestrator": {
+      "model": "openai/gpt-5.4",
+      "variant": "xhigh"
+    },
+    "planning-manager": {
+      "model": "openai/gpt-5.4",
+      "variant": "high"
+    },
+    "execution-manager": {
+      "model": "openai/gpt-5.4",
+      "variant": "high"
+    },
+    "acceptance-manager": {
+      "model": "openai/gpt-5.4",
+      "variant": "high"
+    },
+    "capability-hand": {
+      "model": "openai/gpt-5.4-mini",
+      "variant": "medium"
+    },
+    "probe-agent": {
+      "model": "openai/gpt-5.4-mini",
+      "variant": "medium"
+    },
+    "feature-planner": {
+      "model": "openai/gpt-5.4",
+      "variant": "high"
+    },
+    "capability-planner": {
+      "model": "openai/gpt-5.4",
+      "variant": "high"
+    }
+  },
+  "categories": {}
+}

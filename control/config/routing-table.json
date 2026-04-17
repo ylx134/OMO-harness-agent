@@ -2,95 +2,281 @@
   "routes": {
     "J-L1": {
       "task_type": "判断型",
-      "description": "the user mainly wants a conclusion, comparison, explanation, or review",
+      "description": "decision, comparison, review, explanation, or audit where the main output is a grounded judgment",
       "flow_tier": "轻流程",
-      "skill_stack": ["check"],
-      "startup_files": ["task.md"],
-      "deliverables": ["answer", "acceptance-report.md"],
-      "anti_shallow_bar": "do not pretend a decision task is complete just because a guess sounds plausible",
+      "manager_stack": ["plan", "drive", "check"],
+      "capability_expectations": [
+        "docs-agent",
+        "evidence-agent"
+      ],
+      "probe_expectations": [
+        "artifact-probe-agent"
+      ],
+      "startup_files": [
+        "task.md",
+        "working-memory.md",
+        "round-contract.md",
+        "orchestration-status.md"
+      ],
+      "deliverables": [
+        "task.md",
+        "round-contract.md",
+        "execution-status.md",
+        "evidence-ledger.md",
+        "acceptance-report.md"
+      ],
+      "summary_outputs": [
+        "task.md",
+        "execution-status.md",
+        "acceptance-report.md"
+      ],
+      "anti_shallow_bar": "do not present a plausible guess as a judged conclusion; even read-only analysis must pass through planning, execution evidence gathering, and independent acceptance",
       "execution_mode": {
-        "multi_agent": false,
-        "single_thread_allowed": true,
-        "requires_contract_negotiation": false
+        "multi_agent": true,
+        "single_thread_allowed": false,
+        "requires_contract_negotiation": true
       },
       "scoring_config": null
     },
     "F-M1": {
       "task_type": "修复型",
-      "description": "something already broken must stop failing",
+      "description": "an existing failure, regression, or broken path must stop failing and nearby breakage must be checked",
       "flow_tier": "中流程",
-      "skill_stack": ["drive", "check"],
-      "startup_files": ["task.md", "working-memory.md", "round-contract.md", "orchestration-status.md"],
-      "deliverables": ["round-contract.md", "execution-status.md", "evidence-ledger.md", "acceptance-report.md"],
-      "anti_shallow_bar": "main failure path and one nearby regression check are both required",
+      "manager_stack": ["plan", "drive", "check"],
+      "capability_expectations": [
+        "shell-agent",
+        "code-agent",
+        "evidence-agent"
+      ],
+      "probe_expectations": [
+        "regression-probe-agent",
+        "artifact-probe-agent"
+      ],
+      "startup_files": [
+        "task.md",
+        "working-memory.md",
+        "round-contract.md",
+        "orchestration-status.md"
+      ],
+      "deliverables": [
+        "round-contract.md",
+        "execution-status.md",
+        "evidence-ledger.md",
+        "acceptance-report.md"
+      ],
+      "summary_outputs": [
+        "execution-status.md",
+        "acceptance-report.md"
+      ],
+      "anti_shallow_bar": "the main failure must be removed and at least one adjacent regression check must be evidenced",
       "execution_mode": {
         "multi_agent": true,
         "single_thread_allowed": false,
         "requires_contract_negotiation": true
       },
       "scoring_config": {
-        "weights": { "产品深度": 0.20, "功能完整性": 0.40, "视觉设计": 0.05, "代码质量": 0.35 },
-        "thresholds": { "产品深度": 7, "功能完整性": 8, "视觉设计": 3, "代码质量": 7 },
+        "weights": {
+          "产品深度": 0.2,
+          "功能完整性": 0.4,
+          "视觉设计": 0.05,
+          "代码质量": 0.35
+        },
+        "thresholds": {
+          "产品深度": 7,
+          "功能完整性": 8,
+          "视觉设计": 3,
+          "代码质量": 7
+        },
         "required_rubric": "backend-logic.md",
         "pass_score": 7.0
       }
     },
     "C-M1": {
       "task_type": "改造型",
-      "description": "a bounded capability inside an existing system must change",
+      "description": "a bounded capability inside an existing system must change without losing architectural or behavioral coherence",
       "flow_tier": "中流程",
-      "skill_stack": ["plan", "drive", "check"],
-      "startup_files": ["task.md", "capability-map.md", "gap-analysis.md", "working-memory.md", "round-contract.md", "orchestration-status.md"],
-      "deliverables": ["task.md", "round-contract.md", "execution-status.md", "evidence-ledger.md", "acceptance-report.md"],
-      "anti_shallow_bar": "do not count visible output alone as progress; the named gap must shrink",
+      "manager_stack": ["plan", "drive", "check"],
+      "capability_expectations": [
+        "docs-agent",
+        "code-agent",
+        "shell-agent",
+        "evidence-agent"
+      ],
+      "probe_expectations": [
+        "regression-probe-agent",
+        "artifact-probe-agent"
+      ],
+      "startup_files": [
+        "task.md",
+        "capability-map.md",
+        "gap-analysis.md",
+        "working-memory.md",
+        "round-contract.md",
+        "orchestration-status.md"
+      ],
+      "deliverables": [
+        "task.md",
+        "round-contract.md",
+        "execution-status.md",
+        "evidence-ledger.md",
+        "acceptance-report.md"
+      ],
+      "summary_outputs": [
+        "task.md",
+        "execution-status.md",
+        "acceptance-report.md"
+      ],
+      "anti_shallow_bar": "visible output alone does not count; the named capability gap must materially shrink and preserve surrounding behavior",
       "execution_mode": {
         "multi_agent": true,
         "single_thread_allowed": false,
         "requires_contract_negotiation": true
       },
       "scoring_config": {
-        "weights": { "产品深度": 0.25, "功能完整性": 0.35, "视觉设计": 0.10, "代码质量": 0.30 },
-        "thresholds": { "产品深度": 7, "功能完整性": 8, "视觉设计": 4, "代码质量": 7 },
+        "weights": {
+          "产品深度": 0.25,
+          "功能完整性": 0.35,
+          "视觉设计": 0.1,
+          "代码质量": 0.3
+        },
+        "thresholds": {
+          "产品深度": 7,
+          "功能完整性": 8,
+          "视觉设计": 4,
+          "代码质量": 7
+        },
         "required_rubric": "refactoring.md",
         "pass_score": 7.0
       }
     },
     "A-M1": {
       "task_type": "能力型",
-      "description": "the real job is to make the system truly able to do something deeper or less visible",
+      "description": "the system must gain a deeper capability whose proof is often less visible than the interface",
       "flow_tier": "中流程",
-      "skill_stack": ["capability-planner", "plan", "drive", "check"],
-      "startup_files": ["task.md", "baseline-source.md", "capability-map.md", "gap-analysis.md", "quality-guardrails.md", "working-memory.md", "round-contract.md", "orchestration-status.md"],
-      "deliverables": ["baseline-source.md", "capability-map.md", "gap-analysis.md", "task.md", "round-contract.md", "execution-status.md", "evidence-ledger.md", "acceptance-report.md"],
-      "anti_shallow_bar": "do not accept a shell that only looks complete; hidden rule or deeper ability must be proved",
+      "manager_stack": ["capability-planner", "plan", "drive", "check"],
+      "capability_expectations": [
+        "docs-agent",
+        "shell-agent",
+        "code-agent",
+        "evidence-agent"
+      ],
+      "probe_expectations": [
+        "api-probe-agent",
+        "regression-probe-agent",
+        "artifact-probe-agent"
+      ],
+      "startup_files": [
+        "task.md",
+        "baseline-source.md",
+        "capability-map.md",
+        "gap-analysis.md",
+        "quality-guardrails.md",
+        "working-memory.md",
+        "round-contract.md",
+        "orchestration-status.md"
+      ],
+      "deliverables": [
+        "baseline-source.md",
+        "capability-map.md",
+        "gap-analysis.md",
+        "task.md",
+        "round-contract.md",
+        "execution-status.md",
+        "evidence-ledger.md",
+        "acceptance-report.md"
+      ],
+      "summary_outputs": [
+        "gap-analysis.md",
+        "task.md",
+        "execution-status.md",
+        "acceptance-report.md"
+      ],
+      "anti_shallow_bar": "a shell that looks complete is insufficient; the hidden or rule-heavy ability must be explicitly proved",
       "execution_mode": {
         "multi_agent": true,
         "single_thread_allowed": false,
         "requires_contract_negotiation": true
       },
       "scoring_config": {
-        "weights": { "产品深度": 0.30, "功能完整性": 0.35, "视觉设计": 0.05, "代码质量": 0.30 },
-        "thresholds": { "产品深度": 7, "功能完整性": 8, "视觉设计": 3, "代码质量": 7 },
+        "weights": {
+          "产品深度": 0.3,
+          "功能完整性": 0.35,
+          "视觉设计": 0.05,
+          "代码质量": 0.3
+        },
+        "thresholds": {
+          "产品深度": 7,
+          "功能完整性": 8,
+          "视觉设计": 3,
+          "代码质量": 7
+        },
         "required_rubric": "backend-logic.md",
         "pass_score": 7.0
       }
     },
     "P-H1": {
       "task_type": "产品型",
-      "description": "the job is to define or build a wider product or subsystem surface",
+      "description": "a product or subsystem surface must be defined and delivered across multiple managed rounds",
       "flow_tier": "重流程",
-      "skill_stack": ["feature-planner", "plan", "drive", "check"],
-      "startup_files": ["task.md", "product-spec.md", "features.json", "features-summary.md", "baseline-source.md", "gap-analysis.md", "working-memory.md", "round-contract.md", "orchestration-status.md"],
-      "deliverables": ["product-spec.md", "features.json", "features-summary.md", "task.md", "round-contract.md", "execution-status.md", "evidence-ledger.md", "acceptance-report.md"],
-      "anti_shallow_bar": "do not accept minimum-only slices when the product promise or release bar says fuller depth is required",
+      "manager_stack": ["feature-planner", "plan", "drive", "check"],
+      "capability_expectations": [
+        "docs-agent",
+        "browser-agent",
+        "code-agent",
+        "shell-agent",
+        "evidence-agent"
+      ],
+      "probe_expectations": [
+        "ui-probe-agent",
+        "regression-probe-agent",
+        "artifact-probe-agent"
+      ],
+      "startup_files": [
+        "task.md",
+        "product-spec.md",
+        "features.json",
+        "features-summary.md",
+        "baseline-source.md",
+        "gap-analysis.md",
+        "working-memory.md",
+        "round-contract.md",
+        "orchestration-status.md"
+      ],
+      "deliverables": [
+        "product-spec.md",
+        "features.json",
+        "features-summary.md",
+        "task.md",
+        "round-contract.md",
+        "execution-status.md",
+        "evidence-ledger.md",
+        "acceptance-report.md"
+      ],
+      "summary_outputs": [
+        "features-summary.md",
+        "task.md",
+        "execution-status.md",
+        "acceptance-report.md"
+      ],
+      "anti_shallow_bar": "do not accept thin slices that technically exist but miss the promised product depth, real journeys, or release-critical polish",
       "execution_mode": {
         "multi_agent": true,
         "single_thread_allowed": false,
         "requires_contract_negotiation": true
       },
       "scoring_config": {
-        "weights": { "产品深度": 0.30, "功能完整性": 0.30, "视觉设计": 0.20, "代码质量": 0.20 },
-        "thresholds": { "产品深度": 7, "功能完整性": 8, "视觉设计": 6, "代码质量": 7 },
+        "weights": {
+          "产品深度": 0.3,
+          "功能完整性": 0.3,
+          "视觉设计": 0.2,
+          "代码质量": 0.2
+        },
+        "thresholds": {
+          "产品深度": 7,
+          "功能完整性": 8,
+          "视觉设计": 6,
+          "代码质量": 7
+        },
         "required_rubric": "frontend-design.md",
         "pass_score": 7.0
       }

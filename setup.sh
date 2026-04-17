@@ -1,61 +1,191 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-# Colors
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-SKILLS_DIR="$HOME/.config/opencode/skills"
 SOURCE_DIR="$(cd "$(dirname "$0")" && pwd)"
-CONFIG_FILE="$HOME/.config/opencode/oh-my-opencode.json"
+PLUGIN_DIR="$SOURCE_DIR/plugin"
+SKILLS_DIR="${OPENCODE_SKILLS_DIR:-$HOME/.config/opencode/skills}"
+AGENTS_DIR="${OPENCODE_AGENTS_DIR:-$HOME/.config/opencode/agents/agent}"
+# Assumption: OpenCode/OMO custom hooks live under ~/.config/opencode/hooks unless the user
+# overrides OPENCODE_HOOKS_DIR. Keep this idempotent and non-destructive.
+HOOKS_DIR="${OPENCODE_HOOKS_DIR:-$HOME/.config/opencode/hooks}"
+CONFIG_FILE="${OPENCODE_CONFIG_FILE:-$HOME/.config/opencode/oh-my-opencode.json}"
+OPENCODE_MAIN_CONFIG_FILE="${OPENCODE_MAIN_CONFIG_FILE:-$HOME/.config/opencode/opencode.json}"
+OPENCODE_CONFIG_DIR="$(dirname "$OPENCODE_MAIN_CONFIG_FILE")"
+OMO_AGENT_CONFIG_FILE="${OMO_AGENT_CONFIG_FILE:-$HOME/.config/opencode/oh-my-openagent.json}"
 
-echo -e "${GREEN}🚀 开始配置 OMO Harness Skills...${NC}"
+SKILLS=(
+  "control"
+  "drive"
+  "check"
+  "plan"
+  "memory"
+  "feature-planner"
+  "capability-planner"
+  "browser-agent"
+  "code-agent"
+  "shell-agent"
+  "evidence-agent"
+  "docs-agent"
+  "ui-probe-agent"
+  "api-probe-agent"
+  "regression-probe-agent"
+  "artifact-probe-agent"
+)
 
-# 1. Create skills directory
-mkdir -p "$SKILLS_DIR"
+HOOKS=(
+  "evidence-verifier.js"
+  "features-json-guard.js"
+  "manager-boundary-guard.js"
+  "summary-sync-guard.js"
+  "probe-evidence-guard.js"
+  "managed-route-completeness-guard.js"
+)
 
-# 2. Create symlinks
-SKILLS=("control" "drive" "check" "plan" "memory" "feature-planner" "capability-planner")
+HARNESS_AGENT_FILES=(
+  "harness-orchestrator.md"
+  "feature-planner.md"
+  "capability-planner.md"
+  "planning-manager.md"
+  "execution-manager.md"
+  "acceptance-manager.md"
+)
+
+echo -e "${GREEN}🚀 Installing OMO Harness Skills managed-agents integration...${NC}"
+
+mkdir -p "$SKILLS_DIR" "$AGENTS_DIR" "$HOOKS_DIR" "$OPENCODE_CONFIG_DIR" "$(dirname "$CONFIG_FILE")"
+
+if [ -d "$PLUGIN_DIR" ]; then
+  echo -e "  ✅ plugin source present: $PLUGIN_DIR"
+  (
+    cd "$OPENCODE_CONFIG_DIR"
+    npm install --no-save "$PLUGIN_DIR" >/dev/null 2>&1 || {
+      echo -e "  ${RED}❌ failed to install local plugin package from $PLUGIN_DIR${NC}"
+      exit 1
+    }
+  )
+  echo -e "  ✅ installed local plugin package: omo-harness-plugin"
+else
+  echo -e "  ${RED}❌ plugin directory missing: $PLUGIN_DIR${NC}"
+  exit 1
+fi
+
 for skill in "${SKILLS[@]}"; do
   if [ -d "$SOURCE_DIR/$skill" ]; then
-    ln -sf "$SOURCE_DIR/$skill" "$SKILLS_DIR/$skill"
-    echo -e "  ✅ 已链接: $skill"
+    ln -sfn "$SOURCE_DIR/$skill" "$SKILLS_DIR/$skill"
+    echo -e "  ✅ linked skill: $skill"
   else
-    echo -e "  ${YELLOW}⚠️  未找到: $skill${NC}"
+    echo -e "  ${YELLOW}⚠️  skill not present in this checkout, skipped: $skill${NC}"
   fi
 done
 
-# 3. Merge JSON config safely
+for hook in "${HOOKS[@]}"; do
+  if [ -f "$SOURCE_DIR/hooks/$hook" ]; then
+    ln -sfn "$SOURCE_DIR/hooks/$hook" "$HOOKS_DIR/$hook"
+    echo -e "  ✅ linked hook: $hook"
+  else
+    echo -e "  ${YELLOW}⚠️  hook not present in this checkout, skipped: $hook${NC}"
+  fi
+done
+
+for agent_file in "${HARNESS_AGENT_FILES[@]}"; do
+  if [ -f "$SOURCE_DIR/agents/agent/$agent_file" ]; then
+    ln -sfn "$SOURCE_DIR/agents/agent/$agent_file" "$AGENTS_DIR/$agent_file"
+    echo -e "  ✅ linked harness agent file: $agent_file"
+  else
+    echo -e "  ${YELLOW}⚠️  harness agent file missing, skipped: $agent_file${NC}"
+  fi
+done
+
 if [ -f "$SOURCE_DIR/oh-my-opencode.json" ]; then
-  python3 -c "
-import json, os
+  python3 - "$CONFIG_FILE" "$SOURCE_DIR/oh-my-opencode.json" "$HOOKS_DIR" <<'PY'
+import json
+import os
+import sys
 
-config_path = os.path.expanduser('$CONFIG_FILE')
-new_path = '$SOURCE_DIR/oh-my-opencode.json'
+config_path, new_path, hooks_dir = sys.argv[1:4]
 
-config = {}
 if os.path.exists(config_path):
     with open(config_path) as f:
         config = json.load(f)
+else:
+    config = {}
 
 with open(new_path) as f:
     new_cfg = json.load(f)
 
-# Deep merge
 config.setdefault('categories', {}).update(new_cfg.get('categories', {}))
 if 'model_fallback' in new_cfg:
     config['model_fallback'] = new_cfg['model_fallback']
 config.setdefault('experimental', {}).update(new_cfg.get('experimental', {}))
 
+if 'hooks' in new_cfg:
+    config.setdefault('hooks', {})
+    config['hooks'].update(new_cfg['hooks'])
+    config['hooks']['install_dir_hint'] = hooks_dir
+
 with open(config_path, 'w') as f:
     json.dump(config, f, indent=2)
+    f.write('\n')
 
-print('  ✅ 已合并 oh-my-opencode.json')
-"
+print('  ✅ merged oh-my-opencode.json')
+PY
 else
-  echo -e "  ${YELLOW}⚠️  未找到 oh-my-opencode.json，跳过配置合并${NC}"
+  echo -e "  ${YELLOW}⚠️  oh-my-opencode.json not found, skipped config merge${NC}"
 fi
 
-echo -e "${GREEN}🎉 配置完成！重启 OpenCode 即可使用 /control 等命令。${NC}"
+python3 - "$OPENCODE_MAIN_CONFIG_FILE" "$PLUGIN_DIR" <<'PY'
+import json
+import os
+import sys
+
+config_path, plugin_dir = sys.argv[1:3]
+if os.path.exists(config_path):
+    with open(config_path) as f:
+        config = json.load(f)
+else:
+    config = {"$schema": "https://opencode.ai/config.json"}
+plugins = config.setdefault('plugin', [])
+plugins = [p for p in plugins if p != 'omo-harness-plugin' and p != plugin_dir]
+plugins.append(plugin_dir)
+config['plugin'] = plugins
+with open(config_path, 'w') as f:
+    json.dump(config, f, indent=2)
+    f.write('\n')
+print(f'  ✅ registered local harness plugin path in opencode.json: {plugin_dir}')
+PY
+
+if [ -f "$SOURCE_DIR/oh-my-openagent.harness.json" ]; then
+  python3 - "$OMO_AGENT_CONFIG_FILE" "$SOURCE_DIR/oh-my-openagent.harness.json" <<'PY'
+import json
+import os
+import sys
+
+config_path, new_path = sys.argv[1:3]
+
+if os.path.exists(config_path):
+    with open(config_path) as f:
+        config = json.load(f)
+else:
+    config = {}
+
+with open(new_path) as f:
+    new_cfg = json.load(f)
+
+config.setdefault('agents', {}).update(new_cfg.get('agents', {}))
+
+with open(config_path, 'w') as f:
+    json.dump(config, f, indent=2)
+    f.write('\n')
+
+print('  ✅ merged harness agents into oh-my-openagent.json')
+PY
+else
+  echo -e "  ${YELLOW}⚠️  oh-my-openagent.harness.json not found, skipped harness-agent merge${NC}"
+fi
+
+echo -e "${GREEN}🎉 Installation complete. Restart OpenCode/OMO to load the new managed-agents skills, hooks, and harness agents.${NC}"

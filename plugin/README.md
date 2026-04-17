@@ -1,0 +1,81 @@
+# OMO Harness Plugin
+
+This package is the runtime control plane for Harness mode.
+
+It currently owns:
+- slash-command intake for `/control`, `/plan`, `/drive`, `/check`
+- semantic lock and route resolution
+- authoritative route/state artifact generation under `.agent-memory/`
+- deferred dispatch queues for managers, capability hands, and probes
+- top-level harness-orchestrator suppression during active deferred routes
+- blocked-state handling
+- observability/debug logging
+
+Skills remain behavior modules.
+Hooks remain low-level integrity guards.
+Agents remain runtime role definitions.
+
+## Current Runtime Model
+
+### 1. Intake
+`/control ...` performs intake only. It writes:
+- `.agent-memory/harness-plugin-state.json`
+- `.agent-memory/orchestration-status.md`
+- `.agent-memory/managed-agent-state-index.json`
+- `.agent-memory/route-packet.json`
+
+No immediate manager/hand/probe fan-out happens inside intake.
+
+### 2. Deferred progression
+The plugin now advances the route through explicit follow-up commands:
+- `/plan` consumes the next planning-stage manager from `pendingManagers`
+- `/drive` consumes `execution-manager` first, then selected capability hands one at a time
+- `/check` consumes `acceptance-manager`, then selected probes, then final acceptance closure
+
+This keeps runtime progression out of the original intake transaction and avoids the earlier `prompt_async failed` lifecycle conflict.
+
+### 3. Top-level orchestrator constraints
+While a Harness route is active:
+- top-level `harness-orchestrator` is allowed to create intake and emit short route summaries
+- top-level tool work is blocked during intake and while a deferred route is active
+- downstream work should proceed through the deferred manager/hand/probe queues instead
+
+## Expected Command Sequences
+
+### F-M1 / C-M1 typical flow
+1. `/control ...`
+2. `/plan`
+3. `/drive` (dispatches `execution-manager`)
+4. `/drive` repeatedly for each selected capability hand
+5. `/check` (dispatches `acceptance-manager`)
+6. `/check` repeatedly for each selected probe and final closure
+
+### A-M1 typical flow
+1. `/control ...`
+2. `/plan` (dispatches `capability-planner`)
+3. `/plan` (dispatches `planning-manager`)
+4. `/drive` (dispatches `execution-manager`)
+5. `/drive` repeatedly for selected hands
+6. `/check` repeatedly for acceptance-manager, probes, and final closure
+
+### P-H1 typical flow
+1. `/control ...`
+2. `/plan` (dispatches `feature-planner`)
+3. `/plan` (dispatches `planning-manager`)
+4. `/drive` (dispatches `execution-manager`)
+5. `/drive` repeatedly for selected hands
+6. `/check` repeatedly for acceptance-manager, probes, and final closure
+
+## Verification
+
+Recommended checks after each stage:
+- inspect `.agent-memory/harness-plugin-state.json`
+- inspect `.agent-memory/orchestration-status.md`
+- inspect `.agent-memory/route-packet.json`
+- inspect `.agent-memory/harness-plugin-debug.log`
+
+The route is only fully complete when:
+- `currentPhase` becomes `complete`
+- `nextExpectedActor` becomes `none`
+- all pending queues are empty
+- dispatched managers/hands/probes reflect the route requirements

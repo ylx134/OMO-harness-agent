@@ -1,0 +1,16 @@
+{
+  "name": "omo-harness-plugin",
+  "version": "0.1.0",
+  "description": "Runtime orchestration plugin for the OMO managed-agents harness",
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "dependencies": {
+    "@opencode-ai/plugin": "^1.4.6"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}

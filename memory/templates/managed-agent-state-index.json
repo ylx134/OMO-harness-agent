@@ -1,0 +1,120 @@
+{
+  "version": "1.0",
+  "mode": "managed-agents",
+  "last_updated": "",
+  "actor_classes": {
+    "brain": ["control"],
+    "managers": ["plan", "drive", "check", "planning-manager", "execution-manager", "acceptance-manager"],
+    "capability_agents": ["browser-agent", "code-agent", "shell-agent", "evidence-agent", "docs-agent"],
+    "probe_agents": ["ui-probe-agent", "api-probe-agent", "regression-probe-agent", "artifact-probe-agent"]
+  },
+  "summary_files": [
+    ".agent-memory/brain-brief.md",
+    ".agent-memory/route-summary.md",
+    ".agent-memory/risk-summary.md",
+    ".agent-memory/acceptance-summary.md"
+  ],
+  "manager_files": {
+    ".agent-memory/task.md": {
+      "readers": ["brain", "managers", "capability_agents", "probe_agents"],
+      "writers": ["brain", "managers"],
+      "requires_summary_sync": true,
+      "summary_targets": [".agent-memory/brain-brief.md", ".agent-memory/route-summary.md"]
+    },
+    ".agent-memory/working-memory.md": {
+      "readers": ["brain", "managers", "capability_agents", "probe_agents"],
+      "writers": ["managers"],
+      "requires_summary_sync": true,
+      "summary_targets": [".agent-memory/route-summary.md", ".agent-memory/risk-summary.md"]
+    },
+    ".agent-memory/round-contract.md": {
+      "readers": ["managers", "capability_agents", "probe_agents"],
+      "writers": ["managers"],
+      "requires_summary_sync": true,
+      "summary_targets": [".agent-memory/route-summary.md"]
+    },
+    ".agent-memory/acceptance-report.md": {
+      "readers": ["brain", "managers"],
+      "writers": ["managers"],
+      "requires_summary_sync": true,
+      "summary_targets": [".agent-memory/acceptance-summary.md", ".agent-memory/risk-summary.md"]
+    },
+    ".agent-memory/orchestration-status.md": {
+      "readers": ["brain", "managers"],
+      "writers": ["brain", "managers"],
+      "requires_summary_sync": true,
+      "summary_targets": [".agent-memory/brain-brief.md", ".agent-memory/route-summary.md"]
+    },
+    ".agent-memory/plan-graph.md": {
+      "readers": ["brain", "managers"],
+      "writers": ["managers"],
+      "requires_summary_sync": false,
+      "summary_targets": []
+    },
+    ".agent-memory/execution-status.md": {
+      "readers": ["brain", "managers"],
+      "writers": ["managers", "capability_agents"],
+      "requires_summary_sync": true,
+      "summary_targets": [".agent-memory/route-summary.md"]
+    }
+  },
+  "detail_files": {
+    ".agent-memory/evidence-ledger.md": {
+      "readers": ["managers", "capability_agents", "probe_agents"],
+      "writers": ["capability_agents", "probe_agents"],
+      "manager_override_allowed": true,
+      "override_marker": "MANAGER_OVERRIDE_ALLOWED"
+    },
+    ".agent-memory/journal.md": {
+      "readers": ["brain", "managers", "capability_agents", "probe_agents"],
+      "writers": ["managers", "capability_agents", "probe_agents"],
+      "append_only": true,
+      "manager_override_allowed": true,
+      "override_marker": "MANAGER_OVERRIDE_ALLOWED"
+    },
+    ".agent-memory/activity.jsonl": {
+      "readers": ["brain", "managers", "capability_agents", "probe_agents"],
+      "writers": ["managers", "capability_agents", "probe_agents"],
+      "append_only": true,
+      "manager_override_allowed": true,
+      "override_marker": "MANAGER_OVERRIDE_ALLOWED"
+    }
+  },
+  "evidence_dirs": {
+    "screenshots": "evidence/screenshots",
+    "command_outputs": "evidence/command-outputs",
+    "api_traces": "evidence/api-traces",
+    "artifacts": "evidence/artifacts",
+    "smoke_tests": "evidence/smoke-tests"
+  },
+  "probe_requirements": {
+    "default": {
+      "ui": false,
+      "api": false,
+      "regression": false,
+      "artifact": false
+    },
+    "current": {
+      "ui": false,
+      "api": false,
+      "regression": false,
+      "artifact": false,
+      "reason": ""
+    }
+  },
+  "summary_sync": {
+    "ack_markers": ["summary-sync: updated", "summary-sync: unchanged", "summary-sync: deferred"],
+    "allow_missing_if_file_is_summary": true
+  },
+  "acceptance": {
+    "report_path": ".agent-memory/acceptance-report.md",
+    "summary_path": ".agent-memory/acceptance-summary.md",
+    "requires_probe_evidence_when_probes_required": true,
+    "accepted_probe_producers": [
+      "ui-probe-agent",
+      "api-probe-agent",
+      "regression-probe-agent",
+      "artifact-probe-agent"
+    ]
+  }
+}

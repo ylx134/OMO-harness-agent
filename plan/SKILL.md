@@ -1,210 +1,166 @@
 ---
 name: plan
-description: Use when a long-running or multi-phase task begins from a short, ambiguous, or shifting request and needs a separate planning pass before execution starts. Also use when execution drift, goal changes, or repeated rework suggest the task needs a fresh high-level plan.
+description: Use when a request needs a dedicated planning-manager pass before execution begins, or when a running route needs its task contract, phase boundaries, capability expectations, and acceptance path clarified again.
 ---
 
 # Plan
 
-## Overview
+## Identity
 
-Create a separate planning pass before execution.
-This skill does not implement, verify, or expand into detailed low-level solution steps.
-It turns a brief request into a stable high-level task contract that execution can follow.
+`plan` is the planning-manager skill in the managed-agents architecture.
 
-Core principle:
-- plan the outcome, not the code
-- freeze the phase boundaries before execution
-- define what success means before work begins
-- define acceptance at the round level, not only at the phase level
-- define the expected finish level, not only the work boundary
+It converts an ambiguous or overloaded request into a stable task contract that other managers can operate from.
+It is not the global orchestrator, and it is not an implementation agent.
 
-## Codex Specific Notes
+## What Planning-Manager Owns
 
-Write the stable planning contract into `.agent-memory/task.md`. When product work needs a fuller
-contract, write or reuse `.agent-memory/product-spec.md`. Use direct file edits or the memory
-scripts, but keep ownership boundaries intact.
+Primary outputs:
+- `.agent-memory/task.md`
+- route-level contract summary
+- phase boundaries
+- done criteria
+- capability expectations
+- probe expectations
+- key risks and non-goals
+
+For product or capability routes, planning-manager consumes upstream specialized planning artifacts instead of replacing them:
+- `feature-planner` owns product-spec and features structure
+- `capability-planner` owns baseline/capability/gap analysis inputs
+
+## Planning-Manager Goal
+
+Produce a contract that lets:
+- `control` understand the route by summary
+- `drive` run bounded rounds without drifting
+- `check` judge work against explicit proof paths
+- capability agents know what they are in service of
+- probe agents know what observations will matter later
 
 ## Role Boundaries
 
 You may:
-- clarify the final goal and done criteria
-- define non-goals and assumptions
-- identify major phases with boundaries and done conditions
-- define the expected finish level for each phase
-- recommend the most practical high-level route
+- clarify the end state
+- define what counts as done and what does not
+- lock semantics when the request could be misread
+- define phases, boundaries, and expected finish levels
+- recommend the right route and manager stack
+- state which capability/probe agents will likely be needed
 
 You must not:
-- implement the task
-- write low-level execution steps
-- perform acceptance or pass/fail judgment
-- turn planning output into a giant speculative design document
+- implement code
+- run acceptance
+- replace the orchestrator's route governance
+- turn the task contract into a giant low-level implementation spec
 
-## Single-Owner Rule
+## Inputs You May Use
 
-- when `/feature-planner` is active, it owns `product-spec.md` — read it and derive `task.md` from it
-- when `/capability-planner` is active, it owns `baseline-source.md`, `capability-map.md`, `gap-analysis.md` — read them and derive `task.md`
-- do not silently rewrite files owned by another skill
+Planning-manager may ask for limited context from lower layers, but only to inform the contract.
+Typical support inputs:
+- docs-agent or equivalent retrieval support for baseline/reference discovery
+- feature-planner outputs for product routes
+- capability-planner outputs for capability routes
+- existing `.agent-memory/` history when resuming
 
-## Required Output
+These are evidence inputs for planning, not excuses to delegate away planning responsibility.
 
-Every planning contract must include:
+## Required Output Contract
 
-- final goal
-- semantic lock: what the user truly means by success
-- what counts as done
-- what does not count as done
-- non-degradable requirements
-- done criteria
-- non-goals
-- assumptions
-- recommended high-level route
-- product promise for the whole task
-- quality bar above "technically works"
-- major phases in order, each with:
-  - purpose and boundary
-  - done condition and required evidence
-  - drift risk
-  - expected finish level
-  - round structure (if phase is large enough to drift)
+Every `task.md` should include:
+- Final Goal
+- Semantic Lock
+- What Counts As Done
+- What Does Not Count As Done
+- Non-Degradable Requirements Summary
+- Done Criteria
+- Non-Goals
+- Assumptions
+- Recommended Route
+- Manager Stack
+- Capability Expectations
+- Probe Expectations
+- Global Phase Structure
+- Product Promise or Capability Promise
+- Quality Bar Above Minimum
+- Key Risks
+- Open Questions
 
 ## Planning Order
 
-### 1. Goal Clarification
-- What must be true at the end?
-- What would count as genuine completion?
-- What is explicitly outside scope?
-- Which requirements must not be weakened or faked?
+### 1. Lock the real meaning
+- what outcome is truly wanted?
+- what thin or fake result must not be mistaken for completion?
 
-### 2. Constraint Capture
-- What must not be changed?
-- What resources, tools, or limits matter?
+### 2. Capture constraints
+- what must stay equivalent?
+- what must not be weakened?
+- what external boundaries matter?
 
-### 2.5. Product Bar Capture
-- What would make the result feel complete instead of merely present?
-- What ordinary version should be avoided even if it would technically pass?
+### 3. Define the route
+- task type
+- flow tier
+- manager stack
+- expected capability agents
+- expected probe agents
 
-### 2.6. Product Contract Expansion (for product tasks)
-- Who is this for?
-- What are the 3-7 most important user journeys?
-- Which states must be covered (first use, empty, loading, success, error)?
-- What release-critical checks must pass?
+### 4. Design phases
+Each phase needs:
+- purpose
+- boundary
+- done condition
+- evidence expectation
+- drift risk
+- finish level
 
-### 2.7. Baseline Source (for non-greenfield tasks)
-- What is the source of truth for "done right"?
-- What parts must stay equivalent?
+### 5. Design roundable work
+For any large phase, define how execution-manager should carve rounds:
+- bounded goal
+- why now
+- likely in-scope files/surfaces
+- evidence that acceptance will later need
 
-### 2.8. Capability Inventory
-- What capabilities already exist?
-- What pieces can be reused?
+## Summary-First Writing Rule
 
-### 2.9. Gap Analysis
-- What capabilities are still missing?
-- Which missing capabilities block completion?
-
-### 3. Phase Design
-Split work into a small number of meaningful phases.
-Each phase should have a distinct purpose, boundary, and done condition.
-
-### 4. Route Selection
-Pick the best default route. Prefer the route with the clearest path to done.
-
-### 4.5. Round Contract Design (for large phases)
-Each round should define:
-- what this round is trying to complete
-- why this round is worth doing now
-- 3-7 checklist items that can be judged one by one
-- what proof each checklist item will need
-- what should block the next round
-- why a minimum-only version would still be too weak
-
-## Output Format
-
-```text
-Planning target:
-- what request or task is being planned
-
-Final goal:
-- the end state this work should achieve
-
-Done criteria:
-- what must be true to stop
-
-Non-goals:
-- what this work will not try to do
-
-Assumptions:
-- current planning assumptions
-
-Product promise:
-- what kind of result this should become if done well
-
-Quality bar above minimum:
-- why a thin pass is not enough
-
-Recommended route:
-- the best high-level path from here
-
-Phases:
-- Phase 1: purpose | boundary | done condition | required evidence | drift risk | finish level
-  - Round 1: goal | checklist items | pass condition | rejection condition | finish level
-- Phase 2: ...
-
-Key risks:
-- the main things that could force a re-plan
-
-Open questions:
-- only questions that materially affect the plan
-```
-
-## Writing to `.agent-memory/task.md`
-
-After planning is complete, write the contract into `.agent-memory/task.md`:
-
-Required fields in `task.md`:
-- `Final Goal`
-- `Semantic Lock`
-- `What Counts As Done`
-- `What Does Not Count As Done`
-- `Non-Degradable Requirements Summary`
-- `Done Criteria`
-- `Non-Goals`
-- `Global Phase Structure`
-- `Global Plan Version`
+Write `task.md` for managers and the orchestrator, not for raw execution.
+That means:
+- summarize direction clearly
+- specify proof paths and constraints
+- avoid line-by-line implementation instructions
+- make route expectations explicit
 
 ## Pairing With Other Skills
 
-With `/memory`:
-- write final goal, done criteria, non-goals, and major phases into `task.md`
-- for product work, write fuller product description into `product-spec.md` only when `/feature-planner` is not the owner
+With `/control`:
+- provide route-ready planning summaries
+- make semantic lock and risk visible at summary level
 
 With `/drive`:
-- hand off the planning contract as the stable whole-task map
-- let drive handle local execution and bounded next steps
+- hand off a contract that can be turned into bounded round contracts
+- make capability expectations explicit
 
 With `/check`:
-- provide phase-level done conditions that acceptance can later judge
-- provide round-level checklist items that acceptance can pass or fail one by one
+- define clear acceptance objects and evidence expectations
+- make probe expectations explicit
 
-## OMO 集成规则
+## OMO Integration
 
-### 任务分发
-- 使用 `task(category="deep", load_skills=["plan"])` 进行规划
-- 产品型任务: `task(category="visual-engineering", load_skills=["feature-planner", "plan"])`
-- 能力型任务: `task(category="ultrabrain", load_skills=["capability-planner", "plan"])`
+Representative dispatch patterns:
+- `task(category="deep", load_skills=["plan"])`
+- `task(category="visual-engineering", load_skills=["feature-planner", "plan"])`
+- `task(category="ultrabrain", load_skills=["capability-planner", "plan"])`
 
-### 状态索引同步
-写入 `task.md` 的同时更新 `state-index.json`：
-```json
-{
-  "task_type": "产品型",
-  "flow_tier": "重流程",
-  "route_id": "P-H1",
-  "features_total": 45,
-  "last_updated": "2026-04-03T10:30:00Z"
-}
-```
+## Anti-Patterns
 
-### 活动日志
-```jsonl
-{"ts": "2026-04-03T10:30:00Z", "event": "planning_completed", "route_id": "P-H1", "agent": "planner"}
-```
+Avoid:
+- vague success definitions like "should work"
+- planning that names managers but omits capability/probe expectations
+- silently rewriting files owned by specialized planners
+- embedding large low-level TODO lists into the top-level contract
+
+## Completion Rule
+
+Planning is complete only when the next manager can proceed without guessing:
+- the route is explicit
+- phase boundaries are explicit
+- proof expectations are explicit
+- non-goals are explicit
+- risks and open questions are explicit

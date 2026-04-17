@@ -16,21 +16,44 @@ template_dir="$skill_dir/templates"
 memory_dir="$workspace_root/$memory_dir_name"
 evidence_dir="$workspace_root/evidence"
 
-mkdir -p "$memory_dir"
-mkdir -p "$evidence_dir"
-mkdir -p "$memory_dir/inbox"
-mkdir -p "$memory_dir/inbox/archive"
+mkdir -p "$memory_dir" "$memory_dir/inbox" "$memory_dir/inbox/archive"
+mkdir -p \
+  "$evidence_dir/screenshots" \
+  "$evidence_dir/command-outputs" \
+  "$evidence_dir/api-traces" \
+  "$evidence_dir/artifacts" \
+  "$evidence_dir/smoke-tests"
 
-# Create evidence subdirectories for organized proof storage
-mkdir -p "$evidence_dir/screenshots"
-mkdir -p "$evidence_dir/command-outputs"
-mkdir -p "$evidence_dir/api-traces"
-mkdir -p "$evidence_dir/artifacts"
-mkdir -p "$evidence_dir/smoke-tests"
-
-for name in task product-spec baseline-source capability-map gap-analysis quality-guardrails working-memory round-contract acceptance-report evidence-ledger orchestration-status plan-graph execution-status acceptance-lessons decisions handoff journal autopilot-status iterations; do
+for name in \
+  brain-brief \
+  route-summary \
+  risk-summary \
+  acceptance-summary \
+  task \
+  product-spec \
+  baseline-source \
+  capability-map \
+  gap-analysis \
+  quality-guardrails \
+  working-memory \
+  round-contract \
+  acceptance-report \
+  evidence-ledger \
+  orchestration-status \
+  plan-graph \
+  execution-status \
+  acceptance-lessons \
+  decisions \
+  handoff \
+  journal \
+  autopilot-status \
+  iterations
+ do
   src="$template_dir/$name.md"
   dst="$memory_dir/$name.md"
+  if [[ ! -f "$src" ]]; then
+    continue
+  fi
   if [[ -f "$dst" ]]; then
     echo "[skip] $dst already exists"
     continue
@@ -38,6 +61,23 @@ for name in task product-spec baseline-source capability-map gap-analysis qualit
   cp "$src" "$dst"
   echo "[ok] created $dst"
 done
+
+managed_index_src="$template_dir/managed-agent-state-index.json"
+managed_index_dst="$memory_dir/managed-agent-state-index.json"
+if [[ -f "$managed_index_dst" ]]; then
+  echo "[skip] $managed_index_dst already exists"
+elif [[ -f "$managed_index_src" ]]; then
+  cp "$managed_index_src" "$managed_index_dst"
+  echo "[ok] created $managed_index_dst"
+fi
+
+legacy_index_dst="$memory_dir/state-index.json"
+if [[ -f "$legacy_index_dst" ]]; then
+  echo "[skip] $legacy_index_dst already exists"
+elif [[ -f "$managed_index_dst" ]]; then
+  cp "$managed_index_dst" "$legacy_index_dst"
+  echo "[ok] created $legacy_index_dst (legacy compatibility copy)"
+fi
 
 init_file="$workspace_root/init.sh"
 if [[ -f "$init_file" ]]; then
@@ -71,26 +111,6 @@ EOF
   echo "[ok] created $progress_file"
 fi
 
-state_index_file="$memory_dir/state-index.json"
-if [[ -f "$state_index_file" ]]; then
-  echo "[skip] $state_index_file already exists"
-else
-  cat > "$state_index_file" <<'SIDX'
-{
-  "task_type": "",
-  "flow_tier": "",
-  "route_id": "",
-  "current_phase": "planning",
-  "current_round": 0,
-  "features_completed": 0,
-  "features_total": 0,
-  "blockers_count": 0,
-  "last_updated": ""
-}
-SIDX
-  echo "[ok] created $state_index_file"
-fi
-
 activity_file="$memory_dir/activity.jsonl"
 if [[ -f "$activity_file" ]]; then
   echo "[skip] $activity_file already exists"
@@ -107,7 +127,6 @@ else
   echo "[ok] created $inbox_index_file"
 fi
 
-# Copy smoke test template to scripts/ if it doesn't exist
 scripts_dir="$workspace_root/scripts"
 mkdir -p "$scripts_dir"
 smoke_test_template="$skill_dir/scripts/smoke_test_template.sh"
