@@ -47,10 +47,8 @@ Owed Writeback: {list of missing files or "none"}
 
 ## Run Mode
 
-Run Mode: {normal | single-thread-degraded (only when selected route explicitly allows it)}
+Run Mode: {normal | single-thread-degraded}
 Orchestration Proof Level: {full | rules-only}
-
-If the selected route forbids single-thread execution, keep `Run Mode: normal`, leave agent states as `not-launched`, and record the missing-subagent condition in `Route Blocking Gaps`.
 
 ## Inbox
 
