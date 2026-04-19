@@ -1,4 +1,6 @@
-import { promises as fs } from "fs";
+import { promises as fs, readFileSync } from "fs";
+import os from "os";
+import { DatabaseSync } from 'node:sqlite';
 import path from "path";
 
 export const id = "omo-harness-plugin";
@@ -42,6 +44,12 @@ const MANAGER_SKILLS = {
   "execution-manager": ["drive", "memory"],
   "acceptance-manager": ["check"],
 };
+
+const ROUTING_TABLE = JSON.parse(
+  readFileSync(new URL('../../control/config/routing-table.json', import.meta.url), 'utf8'),
+);
+
+const AUTOPILOT_WATCHERS = new Map();
 
 function nowIso() {
   return new Date().toISOString();
@@ -88,80 +96,168 @@ function classifyTask(message) {
   return "J-L1";
 }
 
-export function routeConfig(routeId) {
-  const configs = {
-    "J-L1": {
-      taskType: "判断型",
-      flowTier: "轻流程",
-      managers: ["planning-manager","execution-manager","acceptance-manager"],
-      capability: ["docs-agent","evidence-agent"],
-      probes: ["artifact-probe-agent"],
-      description: 'decision, comparison, review, explanation, or audit where the main output is a grounded judgment',
-      startupFiles: ['task.md', 'working-memory.md', 'round-contract.md', 'orchestration-status.md'],
-      deliverables: ['task.md', 'round-contract.md', 'execution-status.md', 'evidence-ledger.md', 'acceptance-report.md'],
-      summaryOutputs: ['task.md', 'execution-status.md', 'acceptance-report.md'],
-      antiShallowBar: 'do not present a plausible guess as a judged conclusion; even read-only analysis must pass through planning, execution evidence gathering, and independent acceptance',
-      executionMode: { multiAgent: true, singleThreadAllowed: false, requiresContractNegotiation: true },
-      category: 'quick',
-    },
-    "F-M1": {
-      taskType: "修复型",
-      flowTier: "中流程",
-      managers: ["planning-manager","execution-manager","acceptance-manager"],
-      capability: ["shell-agent","code-agent","evidence-agent"],
-      probes: ["regression-probe-agent","artifact-probe-agent"],
-      description: 'an existing failure, regression, or broken path must stop failing and nearby breakage must be checked',
-      startupFiles: ['task.md', 'working-memory.md', 'round-contract.md', 'orchestration-status.md'],
-      deliverables: ['round-contract.md', 'execution-status.md', 'evidence-ledger.md', 'acceptance-report.md'],
-      summaryOutputs: ['execution-status.md', 'acceptance-report.md'],
-      antiShallowBar: 'the main failure must be removed and at least one adjacent regression check must be evidenced',
-      executionMode: { multiAgent: true, singleThreadAllowed: false, requiresContractNegotiation: true },
-      category: 'deep',
-    },
-    "C-M1": {
-      taskType: "改造型",
-      flowTier: "中流程",
-      managers: ["planning-manager","execution-manager","acceptance-manager"],
-      capability: ["docs-agent","code-agent","shell-agent","evidence-agent"],
-      probes: ["regression-probe-agent","artifact-probe-agent"],
-      description: 'a bounded capability inside an existing system must change without losing architectural or behavioral coherence',
-      startupFiles: ['task.md', 'capability-map.md', 'gap-analysis.md', 'working-memory.md', 'round-contract.md', 'orchestration-status.md'],
-      deliverables: ['task.md', 'round-contract.md', 'execution-status.md', 'evidence-ledger.md', 'acceptance-report.md'],
-      summaryOutputs: ['task.md', 'execution-status.md', 'acceptance-report.md'],
-      antiShallowBar: 'visible output alone does not count; the named capability gap must materially shrink and preserve surrounding behavior',
-      executionMode: { multiAgent: true, singleThreadAllowed: false, requiresContractNegotiation: true },
-      category: 'deep',
-    },
-    "A-M1": {
-      taskType: "能力型",
-      flowTier: "中流程",
-      managers: ["capability-planner","planning-manager","execution-manager","acceptance-manager"],
-      capability: ["docs-agent","shell-agent","code-agent","evidence-agent"],
-      probes: ["api-probe-agent","regression-probe-agent","artifact-probe-agent"],
-      description: 'the system must gain a deeper capability whose proof is often less visible than the interface',
-      startupFiles: ['task.md', 'baseline-source.md', 'capability-map.md', 'gap-analysis.md', 'quality-guardrails.md', 'working-memory.md', 'round-contract.md', 'orchestration-status.md'],
-      deliverables: ['baseline-source.md', 'capability-map.md', 'gap-analysis.md', 'task.md', 'round-contract.md', 'execution-status.md', 'evidence-ledger.md', 'acceptance-report.md'],
-      summaryOutputs: ['gap-analysis.md', 'task.md', 'execution-status.md', 'acceptance-report.md'],
-      antiShallowBar: 'a shell that looks complete is insufficient; the hidden or rule-heavy ability must be explicitly proved',
-      executionMode: { multiAgent: true, singleThreadAllowed: false, requiresContractNegotiation: true },
-      category: 'ultrabrain',
-    },
-    "P-H1": {
-      taskType: "产品型",
-      flowTier: "重流程",
-      managers: ["feature-planner","planning-manager","execution-manager","acceptance-manager"],
-      capability: ["docs-agent","browser-agent","code-agent","shell-agent","evidence-agent"],
-      probes: ["ui-probe-agent","regression-probe-agent","artifact-probe-agent"],
-      description: 'a product or subsystem surface must be defined and delivered across multiple managed rounds',
-      startupFiles: ['task.md', 'product-spec.md', 'features.json', 'features-summary.md', 'baseline-source.md', 'gap-analysis.md', 'working-memory.md', 'round-contract.md', 'orchestration-status.md'],
-      deliverables: ['product-spec.md', 'features.json', 'features-summary.md', 'task.md', 'round-contract.md', 'execution-status.md', 'evidence-ledger.md', 'acceptance-report.md'],
-      summaryOutputs: ['features-summary.md', 'task.md', 'execution-status.md', 'acceptance-report.md'],
-      antiShallowBar: 'do not accept thin slices that technically exist but miss the promised product depth, real journeys, or release-critical polish',
-      executionMode: { multiAgent: true, singleThreadAllowed: false, requiresContractNegotiation: true },
-      category: 'visual-engineering',
-    },
+function formatSection(items, fallback = 'none') {
+  const filtered = (items || []).filter(Boolean);
+  if (filtered.length === 0) return fallback;
+  return filtered.map((item) => `- ${item}`).join('\n');
+}
+
+function buildRouteDoneCriteria(route, semanticLockStatus) {
+  if (semanticLockStatus !== 'locked') {
+    return [
+      'Clarify the user intent before any planning or execution begins.',
+      'Do not dispatch managers, hands, or probes while the semantic lock is unresolved.',
+    ];
+  }
+
+  return [
+    `Route ${route.taskType} / ${route.flowTier} is locked to the requested outcome.`,
+    `Required deliverables: ${(route.deliverables || []).join(', ') || 'none'}.`,
+    route.antiShallowBar,
+  ];
+}
+
+function resolveSemanticLock(message, routeId, route) {
+  const raw = String(message || '').trim();
+  const msg = lower(raw).replace(/\s+/g, ' ').trim();
+  const obviouslyAmbiguous = new Set([
+    '看一下这个',
+    '看看这个',
+    '这个',
+    'check this',
+    'look into this',
+    'review this',
+    'check it',
+    'look into it',
+    'this',
+    'it',
+  ]);
+  const vagueInvestigations = ['看一下', '看看', 'check', 'look into', 'review'];
+  const referentialWords = ['这个', 'this', 'it', 'that'];
+  const needsClarification = obviouslyAmbiguous.has(msg)
+    || (routeId === 'J-L1'
+      && vagueInvestigations.some((phrase) => msg.includes(phrase))
+      && referentialWords.some((word) => msg.includes(word))
+      && msg.length <= 20);
+
+  if (needsClarification) {
+    return {
+      status: 'needs_clarification',
+      text: 'Clarification required: the request is too referential to lock a safe route.',
+      whatCountsAsDone: [
+        'The user clarifies the exact target, outcome, or comparison frame.',
+        'A route can be selected without guessing hidden intent.',
+      ],
+      whatDoesNotCountAsDone: [
+        'Guessing what “this” or “这个” refers to.',
+        'Picking a route and progressing anyway just because a plausible interpretation exists.',
+      ],
+      nonDegradableRequirements: [
+        'Do not guess the user intent when the core meaning is not locked.',
+      ],
+    };
+  }
+
+  return {
+    status: 'locked',
+    text: `Locked goal: ${raw || route.description}`,
+    whatCountsAsDone: [
+      route.description,
+      ...buildRouteDoneCriteria(route, 'locked'),
+    ],
+    whatDoesNotCountAsDone: [route.antiShallowBar],
+    nonDegradableRequirements: [route.antiShallowBar],
   };
-  return configs[routeId] || configs["J-L1"];
+}
+
+function buildTaskDocument(message, routeId, route, semanticLock) {
+  const finalGoal = semanticLock.status === 'locked'
+    ? semanticLock.text.replace(/^Locked goal:\s*/, '')
+    : 'Clarify the user intent before continuing with managed routing.';
+
+  return [
+    '# Task',
+    '',
+    'Global Plan Version: v1.0',
+    '',
+    '## Final Goal',
+    '',
+    finalGoal,
+    '',
+    '## Semantic Lock',
+    '',
+    semanticLock.text,
+    '',
+    '## What Counts As Done',
+    '',
+    formatSection(semanticLock.whatCountsAsDone),
+    '',
+    '## What Does Not Count As Done',
+    '',
+    formatSection(semanticLock.whatDoesNotCountAsDone),
+    '',
+    '## Non-Degradable Requirements Summary',
+    '',
+    formatSection(semanticLock.nonDegradableRequirements),
+    '',
+    '## Done Criteria',
+    '',
+    formatSection(buildRouteDoneCriteria(route, semanticLock.status)),
+    '',
+    '## Non-Goals',
+    '',
+    formatSection([
+      'Do not silently widen the route beyond the locked task type.',
+      'Do not treat placeholder artifacts as completed deliverables.',
+    ]),
+    '',
+    '## Hard Constraints',
+    '',
+    formatSection([
+      'Harness runtime remains authoritative for route state artifacts.',
+      'Deferred progression must happen via /plan, /drive, and /check only.',
+    ]),
+    '',
+    '## Global Phase Structure',
+    '',
+    'Phase G1: Intake and route lock',
+    '- Purpose: Capture the request, lock the meaning, and write authoritative state artifacts.',
+    '- Boundary: No manager, hand, or probe progression happens here.',
+    `- Done condition: Semantic lock is ${semanticLock.status} and intake artifacts are synchronized.`,
+    '',
+    'Phase G2: Deferred progression',
+    '- Purpose: Advance the selected route through planning, execution, and acceptance only after intake is stable.',
+    '- Boundary: No silent one-transaction auto-completion.',
+    '- Done condition: Required actors and deliverables for the locked route are complete.',
+    '',
+    '## Product Spec Pointer',
+    '',
+    '(For product work) Full product contract in: `.agent-memory/product-spec.md`',
+    '',
+    `<!-- route:${routeId} semantic-lock:${semanticLock.status} -->`,
+  ].join('\n');
+}
+
+export function routeConfig(routeId) {
+  const routes = ROUTING_TABLE.routes || {};
+  const route = routes[routeId] || routes['J-L1'];
+  return {
+    taskType: route.task_type,
+    flowTier: route.flow_tier,
+    managers: [...(route.manager_requirements || [])],
+    capability: [...(route.capability_requirements || [])],
+    probes: [...(route.probe_requirements || [])],
+    description: route.description,
+    startupFiles: [...(route.startup_files || [])],
+    deliverables: [...(route.deliverables || [])],
+    antiShallowBar: route.anti_shallow_bar,
+    executionMode: {
+      multiAgent: Boolean(route.execution_mode?.multi_agent),
+      singleThreadAllowed: Boolean(route.execution_mode?.single_thread_allowed),
+      requiresContractNegotiation: Boolean(route.execution_mode?.requires_contract_negotiation),
+    },
+    category: ROUTING_TABLE.category_mapping?.[route.task_type] || 'quick',
+  };
 }
 
 function planningFilesForRoute(route) {
@@ -207,6 +303,8 @@ function buildRoutePacket(routeId, route, state) {
     routeId,
     taskType: route.taskType,
     flowTier: route.flowTier,
+    semanticLockStatus: state?.semanticLockStatus || 'locked',
+    semanticLockText: state?.semanticLockText || '',
     reasonForLane: route.description,
     routingContractRow: `${routeId} | ${route.taskType} | ${route.flowTier} | managers=${route.managers.join(' -> ')}`,
     resolvedSkillStack: unique([...route.managers, ...(state?.selectedCapabilityHands || []), ...(state?.selectedProbes || [])]),
@@ -240,6 +338,8 @@ export function selectCapabilityHands(state) {
   const routeId = state?.routeId || "J-L1";
   const required = unique(state?.requiredCapabilityHands || routeConfig(routeId).capability);
   const msg = lower(state?.rawUserInput || "");
+
+  if (required.length === 0) return [];
 
   if (routeId === "P-H1" || routeId === "A-M1") return required;
 
@@ -296,7 +396,7 @@ function determineActiveAgent(input) {
 }
 
 function isHarnessAgent(agent) {
-  return HARNESS_AGENTS.has(agent);
+  return HARNESS_AGENTS.has(agent) || CAPABILITY_AGENTS.has(agent) || PROBE_AGENTS.has(agent);
 }
 
 function normalizeCommandName(command) {
@@ -315,6 +415,11 @@ function routeIdForCommand(command, message = '') {
   return classifyTask(message);
 }
 
+function isManualHarnessMode(message = '') {
+  const msg = lower(String(message || ''));
+  return msg.includes('--manual') || msg.includes('手动推进');
+}
+
 function isSyntheticHarnessExpansionMessage(message) {
   const msg = String(message || '');
   return msg.includes('[analyze-mode]')
@@ -325,6 +430,47 @@ function isSyntheticHarnessExpansionMessage(message) {
     || msg.includes('<!-- OMO_INTERNAL_INITIATOR -->')
     || msg.includes('[BACKGROUND TASK COMPLETED]')
     || msg.includes('[ALL BACKGROUND TASKS COMPLETE]');
+}
+
+function isSyntheticAutoDispatchEcho(message) {
+  const msg = String(message || '').trim();
+  return msg.startsWith('You are being auto-dispatched by the Harness plugin as ')
+    || msg.startsWith('You are being re-dispatched by the Harness plugin as acceptance-manager for final closure.');
+}
+
+function chatMessageSessionID(input) {
+  return input?.sessionID || input?.sessionId || input?.body?.sessionID || input?.path?.id || '';
+}
+
+function logicalActorForSession(state, sessionID = '') {
+  if (!state || !sessionID) return '';
+  if (state.activeDispatch?.sessionID === sessionID && state.activeDispatch?.actor) return state.activeDispatch.actor;
+  if (state.sessionID === sessionID) return state.activeAgent || 'harness-orchestrator';
+  return actorForSession(state, sessionID);
+}
+
+function logicalActorForInput(state, input) {
+  const sessionActor = logicalActorForSession(state, chatMessageSessionID(input));
+  return sessionActor || determineActiveAgent(input) || '';
+}
+
+function actorForSession(state, sessionID = '') {
+  if (!state || !sessionID) return '';
+  const child = state.childDispatchSessionIDs || {};
+  if ((child.planning || []).includes(sessionID)) {
+    if (state.activeDispatch?.sessionID === sessionID && state.activeDispatch?.actor) return state.activeDispatch.actor;
+    return state.pendingManagers?.[0] || 'planning-manager';
+  }
+  if ((child.execution || []).includes(sessionID)) return 'execution-manager';
+  if ((child.acceptance || []).includes(sessionID)) return 'acceptance-manager';
+  for (const [actor, sessions] of Object.entries(child.capabilityHands || {})) {
+    if ((sessions || []).includes(sessionID)) return actor;
+  }
+  for (const [actor, sessions] of Object.entries(child.probes || {})) {
+    if ((sessions || []).includes(sessionID)) return actor;
+  }
+  if ((child.acceptanceClosure || []).includes(sessionID)) return 'acceptance-manager';
+  return '';
 }
 
 function buildSystemAdditions(agent, state = null) {
@@ -409,14 +555,27 @@ async function initMemoryScaffold(workspace) {
   }
   const idx = path.join(inboxDir, 'index.jsonl');
   if (!(await exists(idx))) await writeText(idx, '');
+
+  const initScript = path.join(workspace, 'init.sh');
+  if (!(await exists(initScript))) {
+    await writeText(initScript, '#!/usr/bin/env bash\n\nset -euo pipefail\n\ncd "$(dirname "$0")"\n\necho "Customize init.sh for this project before relying on autonomous startup."\n');
+  }
+
+  const progressFile = path.join(workspace, 'claude-progress.txt');
+  if (!(await exists(progressFile))) {
+    await writeText(progressFile, `=== Session 1 (${nowIso()}) ===\nCompleted:\nWorking on:\nBlocked:\nNotes:\n`);
+  }
 }
 
-async function initializeHarnessTask(workspace, message, agent, routeIdOverride = '') {
+async function initializeHarnessTask(workspace, message, agent, routeIdOverride = '', autopilotEnabled = true) {
   await initMemoryScaffold(workspace);
   const routeId = routeIdOverride || classifyTask(message);
   const route = routeConfig(routeId);
+  const semanticLock = resolveSemanticLock(message, routeId, route);
   const reqId = requestId();
   const completedDeliverables = await detectCompletedDeliverables(workspace, route);
+  const selectedCapabilityHands = selectCapabilityHands({ routeId, rawUserInput: message, requiredCapabilityHands: route.capability });
+  const selectedProbes = selectProbes({ routeId, rawUserInput: message, requiredProbes: route.probes });
   const state = {
     version: 1,
     mode: 'harness',
@@ -425,21 +584,21 @@ async function initializeHarnessTask(workspace, message, agent, routeIdOverride 
     routeId,
     taskType: route.taskType,
     flowTier: route.flowTier,
-    currentPhase: 'intake',
-    nextExpectedActor: route.managers[0] || 'planning-manager',
+    currentPhase: semanticLock.status === 'locked' ? 'intake' : 'blocked',
+    nextExpectedActor: semanticLock.status === 'locked' ? (route.managers[0] || 'none') : 'none',
     requiredManagers: route.managers,
     pendingManagers: [...route.managers],
     dispatchedManagers: [],
     requiredCapabilityHands: route.capability,
-    selectedCapabilityHands: selectCapabilityHands({ routeId, rawUserInput: message, requiredCapabilityHands: route.capability }),
-    pendingCapabilityHands: selectCapabilityHands({ routeId, rawUserInput: message, requiredCapabilityHands: route.capability }),
+    selectedCapabilityHands,
+    pendingCapabilityHands: [...selectedCapabilityHands],
     dispatchedCapabilityHands: [],
     requiredProbes: route.probes,
-    selectedProbes: selectProbes({ routeId, rawUserInput: message, requiredProbes: route.probes }),
-    pendingProbes: selectProbes({ routeId, rawUserInput: message, requiredProbes: route.probes }),
+    selectedProbes,
+    pendingProbes: [...selectedProbes],
     dispatchedProbes: [],
     completedDeliverables,
-    deferredDispatchState: 'ready',
+    deferredDispatchState: semanticLock.status === 'locked' ? 'ready' : 'blocked',
     lastCompletedActor: 'none',
     lastDispatchError: null,
     childDispatchSessionIDs: {
@@ -451,14 +610,18 @@ async function initializeHarnessTask(workspace, message, agent, routeIdOverride 
       acceptanceClosure: [],
     },
     activeDispatch: null,
-    blocked: false,
-    blockedReason: '',
+    blocked: semanticLock.status !== 'locked',
+    blockedReason: semanticLock.status !== 'locked' ? semanticLock.text : '',
+    semanticLockStatus: semanticLock.status,
+    semanticLockText: semanticLock.text,
+    autopilotEnabled: Boolean(autopilotEnabled && semanticLock.status === 'locked'),
     createdAt: nowIso(),
     updatedAt: nowIso(),
     rawUserInput: message,
   };
   const routePacket = buildRoutePacket(routeId, route, state);
   await savePluginState(workspace, state);
+  await writeText(path.join(workspace, '.agent-memory', 'task.md'), buildTaskDocument(message, routeId, route, semanticLock));
   await writeText(path.join(workspace, '.agent-memory', 'route-packet.json'), JSON.stringify(routePacket, null, 2) + '\n');
   const inboxFile = path.join(workspace, '.agent-memory', 'inbox', `${reqId}.md`);
   await writeText(inboxFile, `# ${reqId}\n\n## Original request\n\n${message}\n`);
@@ -471,8 +634,10 @@ async function initializeHarnessTask(workspace, message, agent, routeIdOverride 
     `- Route: ${routeId}`,
     `- Task Type: ${route.taskType}`,
     `- Flow Tier: ${route.flowTier}`,
-    `- Current Phase: intake`,
-    `- Expected Next Writer: ${route.managers[0] || 'planning-manager'}`,
+    `- Semantic Lock Status: ${state.semanticLockStatus}`,
+    `- Semantic Lock Text: ${state.semanticLockText}`,
+    `- Current Phase: ${state.currentPhase}`,
+    `- Expected Next Writer: ${state.nextExpectedActor}`,
     `- Reason for Lane: ${routePacket.reasonForLane}`,
     `- Routing Contract Row: ${routePacket.routingContractRow}`,
     `- Resolved Skill Stack: ${routePacket.resolvedSkillStack.join(', ')}`,
@@ -483,15 +648,17 @@ async function initializeHarnessTask(workspace, message, agent, routeIdOverride 
     `- Required Acceptance Gates: ${routePacket.requiredAcceptanceGates.join(', ')}`,
     `- Required Managers: ${route.managers.join(', ')}`,
     `- Required Capability Hands: ${route.capability.join(', ')}`,
-    `- Selected Capability Hands: ${state.selectedCapabilityHands.join(', ')}`,
+    `- Selected Capability Hands: ${state.selectedCapabilityHands.join(', ') || 'none'}`,
     `- Required Probes: ${route.probes.join(', ')}`,
-    `- Selected Probes: ${state.selectedProbes.join(', ')}`,
+    `- Selected Probes: ${state.selectedProbes.join(', ') || 'none'}`,
     `- Required Deliverables: ${routePacket.requiredDeliverables.join(', ')}`,
     `- Missing Deliverables: ${routePacket.missingDeliverables.join(', ') || 'none'}`,
     `- Route Blocking Gaps: ${routePacket.routeBlockingGaps.join(', ') || 'none'}`,
+    `- Blocked: ${state.blocked}`,
+    `- Blocked Reason: ${state.blockedReason || 'none'}`,
   ].join('\n') + '\n');
-  await writeText(path.join(workspace, '.agent-memory', 'brain-brief.md'), `# Brain Brief\n\n- Request ID: ${reqId}\n- Goal: ${message}\n- Route: ${routeId}\n- Next expected actor: ${route.managers[0] || 'planning-manager'}\n`);
-  await writeText(path.join(workspace, '.agent-memory', 'route-summary.md'), `# Route Summary\n\n- Route ID: ${routeId}\n- Task Type: ${route.taskType}\n- Managers: ${route.managers.join(', ')}\n- Hands: ${route.capability.join(', ')}\n- Selected Hands: ${state.selectedCapabilityHands.join(', ')}\n- Probes: ${route.probes.join(', ')}\n- Selected Probes: ${state.selectedProbes.join(', ')}\n- Deliverables: ${route.deliverables.join(', ')}\n`);
+  await writeText(path.join(workspace, '.agent-memory', 'brain-brief.md'), `# Brain Brief\n\n- Request ID: ${reqId}\n- Goal: ${message}\n- Route: ${routeId}\n- Semantic lock: ${state.semanticLockStatus}\n- Next expected actor: ${state.nextExpectedActor}\n`);
+  await writeText(path.join(workspace, '.agent-memory', 'route-summary.md'), `# Route Summary\n\n- Route ID: ${routeId}\n- Task Type: ${route.taskType}\n- Semantic Lock Status: ${state.semanticLockStatus}\n- Managers: ${route.managers.join(', ') || 'none'}\n- Hands: ${route.capability.join(', ') || 'none'}\n- Selected Hands: ${state.selectedCapabilityHands.join(', ') || 'none'}\n- Probes: ${route.probes.join(', ') || 'none'}\n- Selected Probes: ${state.selectedProbes.join(', ') || 'none'}\n- Deliverables: ${route.deliverables.join(', ') || 'none'}\n`);
   await appendText(path.join(workspace, '.agent-memory', 'activity.jsonl'), JSON.stringify({ event: 'task.intake', requestId: reqId, routeId, ts: nowIso() }) + '\n');
   return state;
 }
@@ -538,6 +705,13 @@ async function syncStatusFromState(workspace) {
     await savePluginState(workspace, state);
   }
   const routePacket = buildRoutePacket(state.routeId, route, state);
+  await writeText(path.join(workspace, '.agent-memory', 'task.md'), buildTaskDocument(state.rawUserInput || '', state.routeId, route, {
+    status: state.semanticLockStatus || 'locked',
+    text: state.semanticLockText || `Locked goal: ${state.rawUserInput || route.description}`,
+    whatCountsAsDone: [route.description, ...buildRouteDoneCriteria(route, state.semanticLockStatus || 'locked')],
+    whatDoesNotCountAsDone: [route.antiShallowBar],
+    nonDegradableRequirements: [route.antiShallowBar],
+  }));
   await writeText(path.join(workspace, '.agent-memory', 'route-packet.json'), JSON.stringify(routePacket, null, 2) + '\n');
   await writeText(path.join(workspace, '.agent-memory', 'orchestration-status.md'), [
     '# Orchestration Status', '',
@@ -546,6 +720,8 @@ async function syncStatusFromState(workspace) {
     `- Route: ${state.routeId}`,
     `- Task Type: ${state.taskType}`,
     `- Flow Tier: ${state.flowTier}`,
+    `- Semantic Lock Status: ${state.semanticLockStatus || 'locked'}`,
+    `- Semantic Lock Text: ${state.semanticLockText || 'none'}`,
     `- Current Phase: ${state.currentPhase}`,
     `- Expected Next Writer: ${state.nextExpectedActor}`,
     `- Reason for Lane: ${routePacket.reasonForLane}`,
@@ -583,6 +759,8 @@ async function syncManagedAgentIndex(workspace) {
     route_id: state.routeId,
     task_type: state.taskType,
     flow_tier: state.flowTier,
+    semantic_lock_status: state.semanticLockStatus || 'locked',
+    semantic_lock_text: state.semanticLockText || '',
     current_phase: state.currentPhase,
     next_expected_actor: state.nextExpectedActor,
     blocked: state.blocked,
@@ -672,6 +850,17 @@ async function guardAcceptanceManager(workspace, tool, args, currentAgent) {
   }
 }
 
+async function guardInactiveChildActor(workspace, hookInput, currentAgent) {
+  const { state } = await loadPluginState(workspace);
+  if (!state?.activeDispatch || !currentAgent || currentAgent === 'harness-orchestrator') return;
+  if (!isHarnessAgent(currentAgent)) return;
+
+  const sessionID = chatMessageSessionID(hookInput);
+  if (activeDispatchMatches(state, currentAgent, sessionID)) return;
+
+  throw new Error('Harness plugin blocked this action: only the currently active deferred child actor may continue tool work.');
+}
+
 async function appendEvent(workspace, event, payload = {}) {
   await appendText(path.join(workspace, '.agent-memory', 'activity.jsonl'), JSON.stringify({ event, ts: nowIso(), ...payload }) + '\n');
 }
@@ -719,6 +908,197 @@ function recordChildDispatchSession(state, actor, phase, sessionID) {
   }
   next.acceptanceClosure = [...(next.acceptanceClosure || []), sessionID];
   return next;
+}
+
+function activeDispatchMatches(state, agent, sessionID = '') {
+  const activeDispatch = state?.activeDispatch;
+  if (!activeDispatch) return false;
+  if (activeDispatch.actor !== agent) return false;
+  if (activeDispatch.sessionID && sessionID && activeDispatch.sessionID !== sessionID) return false;
+  return true;
+}
+
+function completedManagerPhase(managerName) {
+  if (managerName === 'execution-manager') return 'execution';
+  if (managerName === 'acceptance-manager') return 'acceptance';
+  return 'planning';
+}
+
+function withoutFirst(values, target) {
+  const next = [...(values || [])];
+  const index = next.indexOf(target);
+  if (index >= 0) next.splice(index, 1);
+  return next;
+}
+
+async function persistDeferredState(workspace, state) {
+  await savePluginState(workspace, state);
+  await syncManagedAgentIndex(workspace);
+  await syncStatusFromState(workspace);
+  return state;
+}
+
+async function managerArtifactCompletionReady(workspace, state, actor) {
+  const route = routeConfig(state.routeId);
+  const completedDeliverables = await detectCompletedDeliverables(workspace, route);
+  if (actor === 'planning-manager') return completedDeliverables.includes('round-contract.md');
+  if (actor === 'capability-planner') {
+    return ['baseline-source.md', 'capability-map.md', 'gap-analysis.md'].every((name) => completedDeliverables.includes(name));
+  }
+  if (actor === 'feature-planner') {
+    return ['product-spec.md', 'features.json', 'features-summary.md'].every((name) => completedDeliverables.includes(name));
+  }
+  return false;
+}
+
+function toolCountsAsChildProgress(toolName) {
+  return toolName !== 'skill';
+}
+
+function opencodeDbPath() {
+  return process.env.OPENCODE_DB_PATH || path.join(os.homedir(), '.local/share/opencode', 'opencode.db');
+}
+
+function latestCompletedAssistantMessage(sessionID = '', startedAt = '') {
+  if (!sessionID) return null;
+  const startedAtMs = Number.isFinite(Date.parse(startedAt)) ? Date.parse(startedAt) : 0;
+  let db;
+  try {
+    db = new DatabaseSync(opencodeDbPath(), { readonly: true });
+    const rows = db.prepare('SELECT data FROM message WHERE session_id = ? AND time_created >= ? ORDER BY time_created DESC LIMIT 25').all(sessionID, startedAtMs);
+    for (const row of rows) {
+      const data = JSON.parse(row.data || '{}');
+      if (data.role !== 'assistant') continue;
+      if (!data.time?.completed) continue;
+      if (data.finish !== 'stop') continue;
+      return data;
+    }
+  } catch {
+    return null;
+  } finally {
+    try { db?.close(); } catch {}
+  }
+  return null;
+}
+
+async function maybeAdvanceFromToolActivity(client, workspace, state, hookInput) {
+  if (!state?.activeDispatch) return state;
+  const sessionID = chatMessageSessionID(hookInput);
+  const agent = logicalActorForInput(state, hookInput);
+  if (!activeDispatchMatches(state, agent, sessionID)) return state;
+
+  const toolName = lower(hookInput.tool);
+  let shouldComplete = false;
+  if (state.activeDispatch.phase === 'manager') {
+    if (['planning-manager', 'capability-planner', 'feature-planner'].includes(agent)) {
+      shouldComplete = await managerArtifactCompletionReady(workspace, state, agent);
+    } else {
+      shouldComplete = toolCountsAsChildProgress(toolName);
+    }
+    if (!shouldComplete) return state;
+    let nextState = await completeDeferredManager(workspace, state, agent);
+    await appendPluginDebug(workspace, 'deferred.manager.completed_from_tool', { actor: agent, tool: toolName, sessionID });
+    if (nextState.autopilotEnabled && !nextState.activeDispatch && nextState.deferredDispatchState !== 'retryable_error' && nextState.currentPhase !== 'complete') {
+      nextState = await advanceDeferredRouteOnce(client, workspace, nextState);
+    }
+    return nextState;
+  }
+
+  if (state.activeDispatch.phase === 'capability-hand' && toolCountsAsChildProgress(toolName)) {
+    let nextState = await completeDeferredCapabilityHand(workspace, state, agent);
+    await appendPluginDebug(workspace, 'deferred.hand.completed_from_tool', { actor: agent, tool: toolName, sessionID });
+    if (nextState.autopilotEnabled && !nextState.activeDispatch && nextState.deferredDispatchState !== 'retryable_error' && nextState.currentPhase !== 'complete') {
+      nextState = await advanceDeferredRouteOnce(client, workspace, nextState);
+    }
+    return nextState;
+  }
+
+  if (state.activeDispatch.phase === 'probe' && toolCountsAsChildProgress(toolName)) {
+    let nextState = await completeDeferredProbe(workspace, state, agent);
+    await appendPluginDebug(workspace, 'deferred.probe.completed_from_tool', { actor: agent, tool: toolName, sessionID });
+    if (nextState.autopilotEnabled && !nextState.activeDispatch && nextState.deferredDispatchState !== 'retryable_error' && nextState.currentPhase !== 'complete') {
+      nextState = await advanceDeferredRouteOnce(client, workspace, nextState);
+    }
+    return nextState;
+  }
+
+  if (state.activeDispatch.phase === 'acceptance-closure' && toolCountsAsChildProgress(toolName)) {
+    const nextState = await completeDeferredAcceptanceClosure(workspace, state);
+    await appendPluginDebug(workspace, 'deferred.acceptance.closure.completed_from_tool', { actor: agent, tool: toolName, sessionID });
+    return nextState;
+  }
+
+  return state;
+}
+
+async function maybeAdvanceFromWorkspaceArtifacts(client, workspace, state) {
+  if (!state?.activeDispatch) return state;
+  if (state.activeDispatch.phase !== 'manager') return state;
+  const actor = state.activeDispatch.actor;
+  if (!['planning-manager', 'capability-planner', 'feature-planner'].includes(actor)) return state;
+
+  const shouldComplete = await managerArtifactCompletionReady(workspace, state, actor);
+  if (!shouldComplete) return state;
+
+  let nextState = await completeDeferredManager(workspace, state, actor);
+  await appendPluginDebug(workspace, 'deferred.manager.completed_from_workspace', { actor, sessionID: state.activeDispatch.sessionID || '' });
+  if (nextState.autopilotEnabled && !nextState.activeDispatch && nextState.deferredDispatchState !== 'retryable_error' && nextState.currentPhase !== 'complete') {
+    nextState = await advanceDeferredRouteOnce(client, workspace, nextState);
+  }
+  return nextState;
+}
+
+async function maybeAdvanceFromSessionStore(client, workspace, state) {
+  if (!state?.activeDispatch?.sessionID) return state;
+  const completedMessage = latestCompletedAssistantMessage(state.activeDispatch.sessionID, state.activeDispatch.startedAt);
+  if (!completedMessage) return state;
+
+  let nextState = state;
+  if (state.activeDispatch.phase === 'manager') {
+    nextState = await completeDeferredManager(workspace, state, state.activeDispatch.actor);
+    await appendPluginDebug(workspace, 'deferred.manager.completed_from_session_store', { actor: state.activeDispatch.actor, sessionID: state.activeDispatch.sessionID });
+  } else if (state.activeDispatch.phase === 'capability-hand') {
+    nextState = await completeDeferredCapabilityHand(workspace, state, state.activeDispatch.actor);
+    await appendPluginDebug(workspace, 'deferred.hand.completed_from_session_store', { actor: state.activeDispatch.actor, sessionID: state.activeDispatch.sessionID });
+  } else if (state.activeDispatch.phase === 'probe') {
+    nextState = await completeDeferredProbe(workspace, state, state.activeDispatch.actor);
+    await appendPluginDebug(workspace, 'deferred.probe.completed_from_session_store', { actor: state.activeDispatch.actor, sessionID: state.activeDispatch.sessionID });
+  } else if (state.activeDispatch.phase === 'acceptance-closure') {
+    nextState = await completeDeferredAcceptanceClosure(workspace, state);
+    await appendPluginDebug(workspace, 'deferred.acceptance.closure.completed_from_session_store', { actor: state.activeDispatch.actor, sessionID: state.activeDispatch.sessionID });
+  }
+
+  if (nextState.autopilotEnabled && !nextState.activeDispatch && nextState.deferredDispatchState !== 'retryable_error' && nextState.currentPhase !== 'complete') {
+    nextState = await advanceDeferredRouteOnce(client, workspace, nextState);
+  }
+  return nextState;
+}
+
+function ensureAutopilotWatcher(client, workspace) {
+  if (AUTOPILOT_WATCHERS.has(workspace)) return;
+  let running = false;
+  const timer = setInterval(async () => {
+    if (running) return;
+    running = true;
+    try {
+      if (!(await exists(path.join(workspace, '.agent-memory', 'harness-plugin-state.json')))) {
+        clearInterval(timer);
+        AUTOPILOT_WATCHERS.delete(workspace);
+        return;
+      }
+      const { state } = await loadPluginState(workspace);
+      if (!state?.autopilotEnabled || !state.activeDispatch) return;
+      const afterSessionStore = await maybeAdvanceFromSessionStore(client, workspace, state);
+      if (afterSessionStore !== state) return;
+      await maybeAdvanceFromWorkspaceArtifacts(client, workspace, state);
+    } catch {
+      // Keep the watcher best-effort; hook-driven paths remain authoritative when available.
+    } finally {
+      running = false;
+    }
+  }, 200);
+  timer.unref?.();
+  AUTOPILOT_WATCHERS.set(workspace, timer);
 }
 
 async function autoDispatchManager(client, workspace, state, managerName) {
@@ -772,7 +1152,6 @@ async function autoDispatchManager(client, workspace, state, managerName) {
     path: { id: targetSessionID },
     query: { directory: workspace },
     body: {
-      agent: managerName,
       parts: [{ type: 'text', text: prompt }]
     }
   });
@@ -803,7 +1182,6 @@ async function autoDispatchCapabilityHand(client, workspace, state, capabilityNa
     path: { id: targetSessionID },
     query: { directory: workspace },
     body: {
-      agent: capabilityName,
       parts: [{ type: 'text', text: prompt }]
     }
   });
@@ -835,7 +1213,6 @@ async function autoDispatchAcceptanceManager(client, workspace, state) {
     path: { id: targetSessionID },
     query: { directory: workspace },
     body: {
-      agent: 'acceptance-manager',
       parts: [{ type: 'text', text: prompt }]
     }
   });
@@ -866,7 +1243,6 @@ async function autoDispatchProbe(client, workspace, state, probeName = 'artifact
     path: { id: targetSessionID },
     query: { directory: workspace },
     body: {
-      agent: probeName,
       parts: [{ type: 'text', text: prompt }]
     }
   });
@@ -898,7 +1274,6 @@ async function autoDispatchAcceptanceClosure(client, workspace, state) {
     path: { id: targetSessionID },
     query: { directory: workspace },
     body: {
-      agent: 'acceptance-manager',
       parts: [{ type: 'text', text: prompt }]
     }
   });
@@ -974,38 +1349,34 @@ async function recordDeferredDispatchError(workspace, state, actor, phase, error
 async function dispatchNextDeferredManager(client, workspace, state) {
   if (!client || !state) return state;
   const pendingManagers = [...(state.pendingManagers || [])];
-  const manager = pendingManagers.shift();
+  const manager = pendingManagers[0];
   if (!manager) return state;
   const begun = await beginDeferredDispatch(workspace, state, manager, 'manager');
   if (begun.skipped) return begun.state;
   state = begun.state;
+  let dispatch;
   try {
-    const dispatch = await autoDispatchManager(client, workspace, state, manager);
-    state = {
-      ...state,
-      childDispatchSessionIDs: recordChildDispatchSession(state, dispatch.actor, dispatch.phase, dispatch.targetSessionID),
-    };
+    dispatch = await autoDispatchManager(client, workspace, state, manager);
   } catch (error) {
     return await recordDeferredDispatchError(workspace, state, manager, 'manager', error);
   }
-  let nextState = {
+  const nextState = {
     ...state,
-    pendingManagers,
+    childDispatchSessionIDs: recordChildDispatchSession(state, dispatch.actor, dispatch.phase, dispatch.targetSessionID),
+    activeDispatch: {
+      ...state.activeDispatch,
+      actor: manager,
+      phase: 'manager',
+      sessionID: dispatch.targetSessionID,
+      startedAt: state.activeDispatch?.startedAt || nowIso(),
+    },
     dispatchedManagers: Array.from(new Set([...(state.dispatchedManagers || []), manager])),
     currentPhase: manager === 'execution-manager' ? 'execution' : manager === 'acceptance-manager' ? 'acceptance' : 'planning',
-    nextExpectedActor: manager === 'execution-manager'
-      ? ((state.pendingCapabilityHands || state.selectedCapabilityHands || [])[0] || pendingManagers[0] || 'acceptance-manager')
-      : manager === 'acceptance-manager'
-        ? ((state.pendingProbes || state.selectedProbes || [])[0] || 'none')
-        : pendingManagers[0] || ((state.pendingCapabilityHands || state.selectedCapabilityHands || [])[0] || 'none'),
+    nextExpectedActor: manager,
     deferredDispatchState: 'manager_in_progress',
-    lastCompletedActor: manager,
     lastDispatchError: null,
   };
-  nextState = await clearDeferredDispatch(workspace, nextState);
-  await savePluginState(workspace, nextState);
-  await syncManagedAgentIndex(workspace);
-  await syncStatusFromState(workspace);
+  await persistDeferredState(workspace, nextState);
   await appendEvent(workspace, 'manager.dispatch.requested', { manager, requestId: state.requestId, routeId: state.routeId });
   await appendPluginDebug(workspace, 'deferred.manager.dispatch.requested', { manager, requestId: state.requestId, remainingManagers: pendingManagers });
   return nextState;
@@ -1014,34 +1385,34 @@ async function dispatchNextDeferredManager(client, workspace, state) {
 async function dispatchNextDeferredHand(client, workspace, state) {
   if (!client || !state) return state;
   const pendingCapabilityHands = [...(state.pendingCapabilityHands || [])];
-  const capabilityName = pendingCapabilityHands.shift();
+  const capabilityName = pendingCapabilityHands[0];
   if (!capabilityName) return state;
   const begun = await beginDeferredDispatch(workspace, state, capabilityName, 'capability-hand');
   if (begun.skipped) return begun.state;
   state = begun.state;
+  let dispatch;
   try {
-    const dispatch = await autoDispatchCapabilityHand(client, workspace, state, capabilityName);
-    state = {
-      ...state,
-      childDispatchSessionIDs: recordChildDispatchSession(state, dispatch.actor, dispatch.phase, dispatch.targetSessionID),
-    };
+    dispatch = await autoDispatchCapabilityHand(client, workspace, state, capabilityName);
   } catch (error) {
     return await recordDeferredDispatchError(workspace, state, capabilityName, 'capability-hand', error);
   }
-  let nextState = {
+  const nextState = {
     ...state,
-    pendingCapabilityHands,
+    childDispatchSessionIDs: recordChildDispatchSession(state, dispatch.actor, dispatch.phase, dispatch.targetSessionID),
+    activeDispatch: {
+      ...state.activeDispatch,
+      actor: capabilityName,
+      phase: 'capability-hand',
+      sessionID: dispatch.targetSessionID,
+      startedAt: state.activeDispatch?.startedAt || nowIso(),
+    },
     dispatchedCapabilityHands: Array.from(new Set([...(state.dispatchedCapabilityHands || []), capabilityName])),
     currentPhase: 'execution',
-    nextExpectedActor: pendingCapabilityHands[0] || ((state.pendingProbes || state.selectedProbes || [])[0] || 'acceptance-manager'),
+    nextExpectedActor: capabilityName,
     deferredDispatchState: 'hand_in_progress',
-    lastCompletedActor: capabilityName,
     lastDispatchError: null,
   };
-  nextState = await clearDeferredDispatch(workspace, nextState);
-  await savePluginState(workspace, nextState);
-  await syncManagedAgentIndex(workspace);
-  await syncStatusFromState(workspace);
+  await persistDeferredState(workspace, nextState);
   await appendEvent(workspace, 'capability.dispatch.requested', { capability: capabilityName, requestId: state.requestId, routeId: state.routeId });
   await appendPluginDebug(workspace, 'deferred.hand.dispatch.requested', { capability: capabilityName, requestId: state.requestId, remainingCapabilityHands: pendingCapabilityHands });
   return nextState;
@@ -1050,34 +1421,34 @@ async function dispatchNextDeferredHand(client, workspace, state) {
 async function dispatchNextDeferredProbe(client, workspace, state) {
   if (!client || !state) return state;
   const pendingProbes = [...(state.pendingProbes || [])];
-  const probeName = pendingProbes.shift();
+  const probeName = pendingProbes[0];
   if (!probeName) return state;
   const begun = await beginDeferredDispatch(workspace, state, probeName, 'probe');
   if (begun.skipped) return begun.state;
   state = begun.state;
+  let dispatch;
   try {
-    const dispatch = await autoDispatchProbe(client, workspace, state, probeName);
-    state = {
-      ...state,
-      childDispatchSessionIDs: recordChildDispatchSession(state, dispatch.actor, dispatch.phase, dispatch.targetSessionID),
-    };
+    dispatch = await autoDispatchProbe(client, workspace, state, probeName);
   } catch (error) {
     return await recordDeferredDispatchError(workspace, state, probeName, 'probe', error);
   }
-  let nextState = {
+  const nextState = {
     ...state,
-    pendingProbes,
+    childDispatchSessionIDs: recordChildDispatchSession(state, dispatch.actor, dispatch.phase, dispatch.targetSessionID),
+    activeDispatch: {
+      ...state.activeDispatch,
+      actor: probeName,
+      phase: 'probe',
+      sessionID: dispatch.targetSessionID,
+      startedAt: state.activeDispatch?.startedAt || nowIso(),
+    },
     dispatchedProbes: Array.from(new Set([...(state.dispatchedProbes || []), probeName])),
     currentPhase: 'probe-verification',
-    nextExpectedActor: pendingProbes[0] || 'acceptance-manager',
+    nextExpectedActor: probeName,
     deferredDispatchState: 'probe_in_progress',
-    lastCompletedActor: probeName,
     lastDispatchError: null,
   };
-  nextState = await clearDeferredDispatch(workspace, nextState);
-  await savePluginState(workspace, nextState);
-  await syncManagedAgentIndex(workspace);
-  await syncStatusFromState(workspace);
+  await persistDeferredState(workspace, nextState);
   await appendEvent(workspace, 'probe.dispatch.requested', { probe: probeName, requestId: state.requestId, routeId: state.routeId });
   await appendPluginDebug(workspace, 'deferred.probe.dispatch.requested', { probe: probeName, requestId: state.requestId, remainingProbes: pendingProbes });
   return nextState;
@@ -1116,17 +1487,96 @@ async function finalizeDeferredAcceptance(client, workspace, state) {
     });
     return nextState;
   }
+  let dispatch;
   try {
-    const dispatch = await autoDispatchAcceptanceClosure(client, workspace, state);
-    state = {
-      ...state,
-      childDispatchSessionIDs: recordChildDispatchSession(state, dispatch.actor, dispatch.phase, dispatch.targetSessionID),
-    };
+    dispatch = await autoDispatchAcceptanceClosure(client, workspace, state);
   } catch (error) {
     return await recordDeferredDispatchError(workspace, state, 'acceptance-manager', 'acceptance-closure', error);
   }
-  let nextState = {
+  const nextState = {
     ...state,
+    childDispatchSessionIDs: recordChildDispatchSession(state, dispatch.actor, dispatch.phase, dispatch.targetSessionID),
+    activeDispatch: {
+      ...state.activeDispatch,
+      actor: 'acceptance-manager',
+      phase: 'acceptance-closure',
+      sessionID: dispatch.targetSessionID,
+      startedAt: state.activeDispatch?.startedAt || nowIso(),
+    },
+    completedDeliverables,
+    currentPhase: 'acceptance',
+    nextExpectedActor: 'acceptance-manager',
+    deferredDispatchState: 'acceptance_closure_in_progress',
+    lastDispatchError: null,
+  };
+  await persistDeferredState(workspace, nextState);
+  await appendPluginDebug(workspace, 'deferred.acceptance.closure.requested', { requestId: state.requestId, routeId: state.routeId });
+  return nextState;
+}
+
+async function completeDeferredManager(workspace, state, managerName) {
+  const pendingManagers = withoutFirst(state.pendingManagers, managerName);
+  const nextState = {
+    ...state,
+    pendingManagers,
+    activeDispatch: null,
+    currentPhase: completedManagerPhase(managerName),
+    nextExpectedActor: pendingManagers[0]
+      || ((state.pendingCapabilityHands || [])[0])
+      || ((state.pendingProbes || [])[0])
+      || (state.dispatchedManagers?.includes('acceptance-manager') ? 'acceptance-manager' : 'none'),
+    deferredDispatchState: 'ready',
+    lastCompletedActor: managerName,
+    lastDispatchError: null,
+  };
+  await persistDeferredState(workspace, nextState);
+  await appendEvent(workspace, 'manager.completed', { manager: managerName, requestId: state.requestId, routeId: state.routeId });
+  await appendPluginDebug(workspace, 'deferred.manager.completed', { manager: managerName, requestId: state.requestId, remainingManagers: pendingManagers });
+  return nextState;
+}
+
+async function completeDeferredCapabilityHand(workspace, state, capabilityName) {
+  const pendingCapabilityHands = withoutFirst(state.pendingCapabilityHands, capabilityName);
+  const nextState = {
+    ...state,
+    pendingCapabilityHands,
+    activeDispatch: null,
+    currentPhase: 'execution',
+    nextExpectedActor: pendingCapabilityHands[0] || (state.pendingManagers?.[0] || 'acceptance-manager'),
+    deferredDispatchState: 'ready',
+    lastCompletedActor: capabilityName,
+    lastDispatchError: null,
+  };
+  await persistDeferredState(workspace, nextState);
+  await appendEvent(workspace, 'capability.completed', { capability: capabilityName, requestId: state.requestId, routeId: state.routeId });
+  await appendPluginDebug(workspace, 'deferred.hand.completed', { capability: capabilityName, requestId: state.requestId, remainingCapabilityHands: pendingCapabilityHands });
+  return nextState;
+}
+
+async function completeDeferredProbe(workspace, state, probeName) {
+  const pendingProbes = withoutFirst(state.pendingProbes, probeName);
+  const nextState = {
+    ...state,
+    pendingProbes,
+    activeDispatch: null,
+    currentPhase: 'probe-verification',
+    nextExpectedActor: pendingProbes[0] || 'acceptance-manager',
+    deferredDispatchState: 'ready',
+    lastCompletedActor: probeName,
+    lastDispatchError: null,
+  };
+  await persistDeferredState(workspace, nextState);
+  await appendEvent(workspace, 'probe.completed', { probe: probeName, requestId: state.requestId, routeId: state.routeId });
+  await appendPluginDebug(workspace, 'deferred.probe.completed', { probe: probeName, requestId: state.requestId, remainingProbes: pendingProbes });
+  return nextState;
+}
+
+async function completeDeferredAcceptanceClosure(workspace, state) {
+  const route = routeConfig(state.routeId);
+  const completedDeliverables = await detectCompletedDeliverables(workspace, route);
+  const nextState = {
+    ...state,
+    activeDispatch: null,
     completedDeliverables,
     currentPhase: 'complete',
     nextExpectedActor: 'none',
@@ -1134,13 +1584,67 @@ async function finalizeDeferredAcceptance(client, workspace, state) {
     lastCompletedActor: 'acceptance-manager',
     lastDispatchError: null,
   };
-  nextState = await clearDeferredDispatch(workspace, nextState);
-  await savePluginState(workspace, nextState);
-  await syncManagedAgentIndex(workspace);
-  await syncStatusFromState(workspace);
+  await persistDeferredState(workspace, nextState);
   await appendEvent(workspace, 'route.completed', { routeId: state.routeId, requestId: state.requestId });
-  await appendPluginDebug(workspace, 'deferred.acceptance.closure.requested', { requestId: state.requestId, routeId: state.routeId });
+  await appendPluginDebug(workspace, 'deferred.acceptance.closure.completed', { requestId: state.requestId, routeId: state.routeId });
   return nextState;
+}
+
+async function handleDeferredActorCompletion(client, workspace, state, hookInput, message) {
+  if (!state?.activeDispatch) return state;
+  const agent = logicalActorForInput(state, hookInput);
+  const sessionID = chatMessageSessionID(hookInput);
+  if (!activeDispatchMatches(state, agent, sessionID)) return state;
+  if (isSyntheticAutoDispatchEcho(message)) {
+    await appendPluginDebug(workspace, 'hook.chat.message.synthetic_ignored', { agent, sessionID, reason: 'auto-dispatch-echo' });
+    return state;
+  }
+
+  let nextState = state;
+  if (state.activeDispatch.phase === 'manager') {
+    nextState = await completeDeferredManager(workspace, state, state.activeDispatch.actor);
+  } else if (state.activeDispatch.phase === 'capability-hand') {
+    nextState = await completeDeferredCapabilityHand(workspace, state, state.activeDispatch.actor);
+  } else if (state.activeDispatch.phase === 'probe') {
+    nextState = await completeDeferredProbe(workspace, state, state.activeDispatch.actor);
+  } else if (state.activeDispatch.phase === 'acceptance-closure') {
+    nextState = await completeDeferredAcceptanceClosure(workspace, state);
+  }
+
+  if (nextState.autopilotEnabled && !nextState.activeDispatch && nextState.deferredDispatchState !== 'retryable_error' && nextState.currentPhase !== 'complete') {
+    return await advanceDeferredRouteOnce(client, workspace, nextState);
+  }
+  return nextState;
+}
+
+async function advanceDeferredRouteOnce(client, workspace, state) {
+  if (!state?.mode || state.mode !== 'harness') return state;
+  if (state.activeDispatch) {
+    await appendPluginDebug(workspace, 'deferred.dispatch.duplicate_skipped', {
+      routeId: state.routeId,
+      requestId: state.requestId,
+      activeDispatch: state.activeDispatch,
+      reason: 'awaiting_child_completion',
+    });
+    return state;
+  }
+  const nextManager = state.pendingManagers?.[0] || '';
+  if (['feature-planner', 'capability-planner', 'planning-manager', 'execution-manager'].includes(nextManager)) {
+    return await dispatchNextDeferredManager(client, workspace, state);
+  }
+  if (state.dispatchedManagers?.includes('execution-manager') && (state.pendingCapabilityHands || []).length > 0) {
+    return await dispatchNextDeferredHand(client, workspace, state);
+  }
+  if (nextManager === 'acceptance-manager') {
+    return await dispatchNextDeferredManager(client, workspace, state);
+  }
+  if (state.dispatchedManagers?.includes('acceptance-manager') && (state.pendingProbes || []).length > 0) {
+    return await dispatchNextDeferredProbe(client, workspace, state);
+  }
+  if (state.dispatchedManagers?.includes('acceptance-manager') && (state.pendingProbes || []).length === 0) {
+    return await finalizeDeferredAcceptance(client, workspace, state);
+  }
+  return state;
 }
 
 export const server = async (input) => {
@@ -1148,6 +1652,7 @@ export const server = async (input) => {
   const client = input.client;
   await ensureDir(path.join(workspace, '.agent-memory'));
   await appendPluginDebug(workspace, 'plugin.server.init', { directory: workspace, worktree: input.worktree, serverUrl: input.serverUrl.toString() });
+  ensureAutopilotWatcher(client, workspace);
   return {
     config: async (config) => {
       config.plugin = config.plugin || [];
@@ -1166,6 +1671,7 @@ export const server = async (input) => {
       const command = normalizeCommandName(hookInput.command);
       if (!isHarnessCommand(command)) return;
       const routeId = routeIdForCommand(command, hookInput.arguments || '');
+      const manualControl = command === 'control' && isManualHarnessMode(hookInput.arguments || '');
       const agentMap = {
         control: 'harness-orchestrator',
         plan: 'planning-manager',
@@ -1177,6 +1683,7 @@ export const server = async (input) => {
       const state = loaded.state;
 
       if (command === 'plan' && state?.mode === 'harness') {
+        if (state.blocked) return;
         const nextManager = state.pendingManagers?.[0] || '';
         if (['feature-planner', 'capability-planner', 'planning-manager'].includes(nextManager)) {
           state.sessionID = hookInput.sessionID;
@@ -1187,6 +1694,7 @@ export const server = async (input) => {
       }
 
       if (command === 'drive' && state?.mode === 'harness') {
+        if (state.blocked) return;
         const nextManager = state.pendingManagers?.[0] || '';
         state.sessionID = hookInput.sessionID;
         await savePluginState(workspace, state);
@@ -1201,6 +1709,7 @@ export const server = async (input) => {
       }
 
       if (command === 'check' && state?.mode === 'harness') {
+        if (state.blocked) return;
         const nextManager = state.pendingManagers?.[0] || '';
         state.sessionID = hookInput.sessionID;
         await savePluginState(workspace, state);
@@ -1218,7 +1727,14 @@ export const server = async (input) => {
         }
       }
 
-      const newState = await initializeHarnessTask(workspace, hookInput.arguments || hookInput.command, activeAgent, routeId);
+      if (command === 'control' && state?.mode === 'harness' && !state.blocked && state.currentPhase !== 'complete' && !manualControl) {
+        state.sessionID = hookInput.sessionID;
+        await savePluginState(workspace, state);
+        await advanceDeferredRouteOnce(client, workspace, state);
+        return;
+      }
+
+      const newState = await initializeHarnessTask(workspace, hookInput.arguments || hookInput.command, activeAgent, routeId, !manualControl);
       newState.sessionID = hookInput.sessionID;
       await savePluginState(workspace, newState);
       await syncManagedAgentIndex(workspace);
@@ -1233,15 +1749,19 @@ export const server = async (input) => {
         selectedCapabilityHands: newState.selectedCapabilityHands,
         selectedProbes: newState.selectedProbes,
       });
+      if (command === 'control' && !newState.blocked && !manualControl) {
+        await advanceDeferredRouteOnce(client, workspace, newState);
+      }
     },
     "chat.message": async (hookInput, output) => {
-      const agent = determineActiveAgent(hookInput);
       const { state } = await loadPluginState(workspace);
-      await appendPluginDebug(workspace, 'hook.chat.message', { agent, hasParts: Boolean(output.parts?.length), partTypes: (output.parts || []).map((p) => p.type), currentPhase: state?.currentPhase || '' });
+      const agent = logicalActorForInput(state, hookInput);
+      const sessionID = chatMessageSessionID(hookInput);
+      await appendPluginDebug(workspace, 'hook.chat.message', { agent, sessionID, hasParts: Boolean(output.parts?.length), partTypes: (output.parts || []).map((p) => p.type), currentPhase: state?.currentPhase || '' });
       if (!isHarnessAgent(agent)) return;
       const textParts = (output.parts || []).filter((p) => p.type === 'text').map((p) => p.text || '');
       const message = textParts.join('\n').trim();
-      await appendPluginDebug(workspace, 'hook.chat.message.harness', { agent, messagePreview: message.slice(0, 200) });
+      await appendPluginDebug(workspace, 'hook.chat.message.harness', { agent, sessionID, messagePreview: message.slice(0, 200) });
       if (!message) return;
       if (agent === 'harness-orchestrator' && state?.currentPhase === 'intake') {
         output.parts = [{
@@ -1255,6 +1775,17 @@ export const server = async (input) => {
         });
         return;
       }
+      if (agent === 'harness-orchestrator' && state?.currentPhase === 'blocked') {
+        output.parts = [{
+          type: 'text',
+          text: `Harness intake blocked: ${state.blockedReason || 'clarification required'}`,
+        }];
+        await appendPluginDebug(workspace, 'hook.chat.message.orchestrator_blocked', {
+          reason: state.blockedReason || 'clarification required',
+          routeId: state.routeId,
+        });
+        return;
+      }
       if (agent === 'harness-orchestrator') {
         await appendPluginDebug(workspace, 'hook.chat.message.orchestrator_ignored', { reason: 'top-level task init is command-only' });
         return;
@@ -1263,21 +1794,23 @@ export const server = async (input) => {
         await appendPluginDebug(workspace, 'hook.chat.message.synthetic_ignored', { agent });
         return;
       }
+      await handleDeferredActorCompletion(client, workspace, state, hookInput, message);
       return;
     },
     "experimental.chat.system.transform": async (hookInput, output) => {
       const { state } = await loadPluginState(workspace);
-      const agent = hookInput.agent || state?.activeAgent || '';
+      const agent = logicalActorForInput(state, hookInput) || state?.activeAgent || '';
       await appendPluginDebug(workspace, 'hook.chat.system.transform', { agent, initialSystemCount: (output.system || []).length, routeId: state?.routeId || '', currentPhase: state?.currentPhase || '' });
       if (!isHarnessAgent(agent)) return;
       output.system = output.system || [];
       output.system.unshift(...buildSystemAdditions(agent, state));
     },
     "tool.execute.before": async (hookInput, output) => {
-      const currentAgent = hookInput.args?.agent || hookInput.args?.subagent_type || '';
       const { state } = await loadPluginState(workspace);
-      const activeAgent = state?.activeAgent || currentAgent || '';
+      const currentAgent = logicalActorForInput(state, hookInput) || hookInput.args?.agent || hookInput.args?.subagent_type || '';
+      const activeAgent = currentAgent || state?.activeAgent || '';
       await appendPluginDebug(workspace, 'hook.tool.before', { tool: hookInput.tool, activeAgent, argsKeys: output.args ? Object.keys(output.args) : [] });
+      await guardInactiveChildActor(workspace, hookInput, currentAgent);
       await requireHarnessManagerDispatch(workspace, hookInput.tool, output.args, activeAgent);
       await guardExecutionManager(workspace, hookInput.tool, output.args, activeAgent);
       await guardAcceptanceManager(workspace, hookInput.tool, output.args, activeAgent);
@@ -1297,6 +1830,7 @@ export const server = async (input) => {
       }
       const { state } = await loadPluginState(workspace);
       if (state) {
+        await maybeAdvanceFromToolActivity(client, workspace, state, hookInput);
         await syncManagedAgentIndex(workspace);
         await syncStatusFromState(workspace);
       }

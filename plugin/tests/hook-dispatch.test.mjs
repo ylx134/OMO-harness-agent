@@ -23,7 +23,7 @@ async function runRoute(commandText) {
   });
 
   await hooks['command.execute.before'](
-    { command: 'control', arguments: commandText, sessionID: 'ses_test' },
+    { command: 'control', arguments: `${commandText} --manual`, sessionID: 'ses_test' },
     { parts: [] },
   );
 

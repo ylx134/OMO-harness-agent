@@ -16,7 +16,7 @@ async function setupIntake(commandText = '修复构建报错并补上回归验�
   });
 
   await hooks['command.execute.before'](
-    { command: 'control', arguments: commandText, sessionID: 'ses_test' },
+    { command: 'control', arguments: `${commandText} --manual`, sessionID: 'ses_test' },
     { parts: [] },
   );
 
@@ -47,6 +47,29 @@ test('chat.message short-circuits harness-orchestrator into deterministic intake
   const debug = await readFile(path.join(workspace, '.agent-memory', 'harness-plugin-debug.log'), 'utf8');
   assert.match(debug, /hook\.chat\.message\.orchestrator_short_circuited/);
   assert.doesNotMatch(debug, /hook\.chat\.message\.orchestrator_ignored/);
+
+  await rm(workspace, { recursive: true, force: true });
+});
+
+test('chat.message still short-circuits intake summary when the host agent is generic but the session belongs to the route owner', async () => {
+  const { workspace, hooks } = await setupIntake();
+  const output = {
+    parts: [
+      { type: 'text', text: 'Generic default-agent output that should be replaced.' },
+    ],
+  };
+
+  await hooks['chat.message'](
+    { agent: 'default-agent', sessionID: 'ses_test' },
+    output,
+  );
+
+  assert.deepEqual(output.parts, [
+    {
+      type: 'text',
+      text: 'Harness intake initialized for F-M1. Next expected actor: planning-manager. Route packet written to .agent-memory/route-packet.json.',
+    },
+  ]);
 
   await rm(workspace, { recursive: true, force: true });
 });

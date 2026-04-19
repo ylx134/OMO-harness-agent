@@ -28,7 +28,7 @@ async function setupHarness() {
   });
 
   await hooks['command.execute.before'](
-    { command: 'control', arguments: '修复构建报错并补上回归验证', sessionID: 'parent_ses' },
+    { command: 'control', arguments: '修复构建报错并补上回归验证 --manual', sessionID: 'parent_ses' },
     { parts: [] },
   );
 
@@ -48,6 +48,7 @@ test('deferred manager dispatch uses child sessions instead of parent session fo
   assert.equal(promptedSessions[0].path.id, 'child_1');
   assert.notEqual(promptedSessions[0].path.id, 'parent_ses');
   assert.equal(createdSessions[0].body.parentID, 'parent_ses');
+  assert.ok(!('agent' in promptedSessions[0].body), 'child prompt should not depend on a host-defined custom agent name');
 
   const state = JSON.parse(await readFile(path.join(workspace, '.agent-memory', 'harness-plugin-state.json'), 'utf8'));
   assert.equal(state.dispatchedManagers[0], 'planning-manager');

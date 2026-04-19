@@ -16,14 +16,14 @@ async function setupIntake(commandText = '修复构建报错并补上回归验�
   });
 
   await hooks['command.execute.before'](
-    { command: 'control', arguments: commandText, sessionID: 'ses_test' },
+    { command: 'control', arguments: `${commandText} --manual`, sessionID: 'ses_test' },
     { parts: [] },
   );
 
   return { workspace, hooks };
 }
 
-test('tool.execute.before blocks top-level harness-orchestrator tool calls during intake', async () => {
+test('tool.execute.before blocks top-level harness-orchestrator tool calls during manual intake', async () => {
   const { workspace, hooks } = await setupIntake();
 
   await assert.rejects(
@@ -36,6 +36,20 @@ test('tool.execute.before blocks top-level harness-orchestrator tool calls durin
 
   const debug = await readFile(path.join(workspace, '.agent-memory', 'harness-plugin-debug.log'), 'utf8');
   assert.match(debug, /tool\.blocked\.during_intake/);
+
+  await rm(workspace, { recursive: true, force: true });
+});
+
+test('tool.execute.before also blocks a generic host agent when its session owns the top-level route', async () => {
+  const { workspace, hooks } = await setupIntake();
+
+  await assert.rejects(
+    () => hooks['tool.execute.before'](
+      { tool: 'read', agent: 'default-agent', sessionID: 'ses_test' },
+      { args: { path: '/tmp/example.txt' } },
+    ),
+    /intake is already initialized; top-level harness-orchestrator must not continue tool work/,
+  );
 
   await rm(workspace, { recursive: true, force: true });
 });

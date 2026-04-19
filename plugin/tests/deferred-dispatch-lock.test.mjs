@@ -6,6 +6,12 @@ import path from 'node:path';
 
 import { server } from '../dist/index.js';
 
+function inferActorFromPrompt(text = '') {
+  const match = text.match(/Harness plugin as ([^.\n]+)/);
+  const actor = match?.[1] || undefined;
+  return actor?.startsWith('acceptance-manager') ? 'acceptance-manager' : actor;
+}
+
 function deferred() {
   let resolve, reject;
   const promise = new Promise((res, rej) => {
@@ -24,7 +30,7 @@ async function setupHarnessWithBlockingDispatch() {
     client: {
       session: {
         promptAsync: async (payload) => {
-          dispatched.push(payload.body.agent);
+          dispatched.push(inferActorFromPrompt(payload.body.parts?.[0]?.text || ''));
           await gate.promise;
         },
       },
@@ -33,40 +39,66 @@ async function setupHarnessWithBlockingDispatch() {
     serverUrl: new URL('http://127.0.0.1:4123/'),
   });
 
-  await hooks['command.execute.before'](
+  const first = hooks['command.execute.before'](
     { command: 'control', arguments: '修复构建报错并补上回归验证', sessionID: 'ses_test' },
     { parts: [] },
   );
 
-  return { workspace, hooks, gate, dispatched };
+  await new Promise((resolve) => setTimeout(resolve, 10));
+
+  return { workspace, hooks, gate, dispatched, first };
 }
 
 async function readState(workspace) {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    try {
+      return JSON.parse(await readFile(path.join(workspace, '.agent-memory', 'harness-plugin-state.json'), 'utf8'));
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        continue;
+      }
+      throw error;
+    }
+  }
   return JSON.parse(await readFile(path.join(workspace, '.agent-memory', 'harness-plugin-state.json'), 'utf8'));
 }
 
-test('duplicate plan command does not launch a second manager dispatch while first is still in flight', async () => {
-  const { workspace, hooks, gate, dispatched } = await setupHarnessWithBlockingDispatch();
+async function waitForActiveDispatch(workspace, actor, attempts = 50) {
+  for (let index = 0; index < attempts; index += 1) {
+    try {
+      const state = await readState(workspace);
+      if (state.activeDispatch?.actor === actor) {
+        return state;
+      }
+    } catch (error) {
+      if (error?.code !== 'ENOENT') {
+        throw error;
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error(`timed out waiting for active dispatch: ${actor}`);
+}
 
-  const first = hooks['command.execute.before'](
-    { command: 'plan', arguments: '继续推进当前 Harness 路由', sessionID: 'ses_test' },
-    { parts: [] },
-  );
+test('duplicate /control does not launch a second manager dispatch while the first autopilot dispatch is still in flight', async () => {
+  const { workspace, hooks, gate, dispatched, first } = await setupHarnessWithBlockingDispatch();
 
-  // allow first dispatch to set lock before second attempt
-  await new Promise((resolve) => setTimeout(resolve, 10));
+  await waitForActiveDispatch(workspace, 'planning-manager');
 
   await hooks['command.execute.before'](
-    { command: 'plan', arguments: '继续推进当前 Harness 路由', sessionID: 'ses_test' },
+    { command: 'control', arguments: '继续推进当前 Harness 路由', sessionID: 'ses_test' },
     { parts: [] },
   );
 
   gate.resolve();
-  await first
+  await first;
 
   const after = await readState(workspace);
-  assert.deepEqual(dispatched, ['planning-manager']);
-  assert.equal(after.activeDispatch, null);
+  assert.equal(dispatched[0], 'planning-manager');
+  assert.equal(dispatched.filter((agent) => agent === 'planning-manager').length, 1);
+  assert.equal(after.activeDispatch?.actor, 'planning-manager');
+  assert.equal(after.deferredDispatchState, 'manager_in_progress');
 
   const debug = await readFile(path.join(workspace, '.agent-memory', 'harness-plugin-debug.log'), 'utf8');
   assert.match(debug, /deferred\.dispatch\.duplicate_skipped/);

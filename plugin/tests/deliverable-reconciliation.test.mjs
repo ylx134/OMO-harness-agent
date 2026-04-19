@@ -24,7 +24,7 @@ async function initializeFRoute(workspace) {
   });
 
   await hooks['command.execute.before'](
-    { command: 'control', arguments: '修复构建报错并补上回归验证', sessionID: 'ses_test' },
+    { command: 'control', arguments: '修复构建报错并补上回归验证 --manual', sessionID: 'ses_test' },
     { parts: [] },
   );
 
