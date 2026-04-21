@@ -3,10 +3,11 @@ import json
 import os
 import shutil
 import subprocess
+from typing import Any
 from pathlib import Path
 
 HOME = Path.home()
-SOURCE = Path('~/Documents/my_workspace/omo-harness-skills').expanduser()
+SOURCE = Path(__file__).resolve().parent.parent
 BASE_CONFIG = HOME / '.config' / 'opencode'
 PROFILES_ROOT = HOME / '.config' / 'opencode-profiles'
 HARNESS_ROOT = PROFILES_ROOT / 'harness'
@@ -46,16 +47,22 @@ def ensure_parent(path: Path):
     path.parent.mkdir(parents=True, exist_ok=True)
 
 
+def load_json_object(path: Path, default: dict[str, Any]) -> dict[str, Any]:
+    if path.exists():
+        return json.loads(path.read_text())
+    return dict(default)
+
+
 def sanitize_harness_pure_profile():
     opencode_json = HARNESS_PURE_CFG / 'opencode.json'
-    data = json.loads(opencode_json.read_text()) if opencode_json.exists() else {"$schema": "https://opencode.ai/config.json"}
+    data = load_json_object(opencode_json, {"$schema": "https://opencode.ai/config.json"})
     data['plugin'] = [str(SOURCE / 'plugin')]
     opencode_json.write_text(json.dumps(data, indent=2) + '\n')
 
 
 def sanitize_omo_profile():
     opencode_json = OMO_CFG / 'opencode.json'
-    data = json.loads(opencode_json.read_text()) if opencode_json.exists() else {"$schema": "https://opencode.ai/config.json"}
+    data = load_json_object(opencode_json, {"$schema": "https://opencode.ai/config.json"})
     plugins = [p for p in data.get('plugin', []) if p != str(SOURCE / 'plugin')]
     if 'oh-my-openagent@latest' not in plugins:
         plugins.append('oh-my-openagent@latest')
