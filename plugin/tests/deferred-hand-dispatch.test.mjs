@@ -63,37 +63,39 @@ test('single /control keeps execution-manager ahead of capability hands until ex
   await completeActiveDispatch(workspace, hooks);
 
   after = await readState(workspace);
-  assert.deepEqual(dispatched.map((entry) => entry.actor), ['planning-manager', 'execution-manager', 'shell-agent']);
+  assert.deepEqual(dispatched.map((entry) => entry.actor), ['planning-manager', 'execution-manager', 'shell-agent', 'evidence-agent']);
   assert.deepEqual(after.pendingManagers, ['acceptance-manager']);
   assert.deepEqual(after.pendingCapabilityHands, ['shell-agent', 'code-agent', 'evidence-agent']);
   assert.equal(after.lastCompletedActor, 'execution-manager');
-  assert.equal(after.activeDispatch?.actor, 'shell-agent');
+  assert.deepEqual(new Set(after.activeStepIds), new Set(['capability-hand:shell-agent', 'capability-hand:evidence-agent']));
+  assert.equal(after.activeDispatch?.actor, 'evidence-agent');
 
   await rm(workspace, { recursive: true, force: true });
 });
 
-test('single /control dispatches capability hands one at a time only after each prior hand completes', async () => {
+test('single /control dispatches non-conflicting capability hands together and waits for lock-conflicting hands', async () => {
   const { workspace, hooks, dispatched } = await setupHarness('修复构建报错并补上回归验证');
 
   await completeActiveDispatch(workspace, hooks);
   await completeActiveDispatch(workspace, hooks);
 
   let after = await readState(workspace);
-  assert.deepEqual(dispatched.map((entry) => entry.actor), ['planning-manager', 'execution-manager', 'shell-agent']);
+  assert.deepEqual(dispatched.map((entry) => entry.actor), ['planning-manager', 'execution-manager', 'shell-agent', 'evidence-agent']);
   assert.deepEqual(after.pendingCapabilityHands, ['shell-agent', 'code-agent', 'evidence-agent']);
+  assert.deepEqual(new Set(after.activeStepIds), new Set(['capability-hand:shell-agent', 'capability-hand:evidence-agent']));
+  assert.equal(after.activeDispatch?.actor, 'evidence-agent');
+
+  await completeActiveDispatch(workspace, hooks);
+  after = await readState(workspace);
+  assert.deepEqual(dispatched.map((entry) => entry.actor), ['planning-manager', 'execution-manager', 'shell-agent', 'evidence-agent']);
+  assert.deepEqual(after.pendingCapabilityHands, ['shell-agent', 'code-agent']);
   assert.equal(after.activeDispatch?.actor, 'shell-agent');
 
   await completeActiveDispatch(workspace, hooks);
   after = await readState(workspace);
-  assert.deepEqual(dispatched.map((entry) => entry.actor), ['planning-manager', 'execution-manager', 'shell-agent', 'code-agent']);
-  assert.deepEqual(after.pendingCapabilityHands, ['code-agent', 'evidence-agent']);
+  assert.deepEqual(dispatched.map((entry) => entry.actor), ['planning-manager', 'execution-manager', 'shell-agent', 'evidence-agent', 'code-agent']);
+  assert.deepEqual(after.pendingCapabilityHands, ['code-agent']);
   assert.equal(after.activeDispatch?.actor, 'code-agent');
-
-  await completeActiveDispatch(workspace, hooks);
-  after = await readState(workspace);
-  assert.deepEqual(dispatched.map((entry) => entry.actor), ['planning-manager', 'execution-manager', 'shell-agent', 'code-agent', 'evidence-agent']);
-  assert.deepEqual(after.pendingCapabilityHands, ['evidence-agent']);
-  assert.equal(after.activeDispatch?.actor, 'evidence-agent');
 
   const debug = await readFile(path.join(workspace, '.agent-memory', 'harness-plugin-debug.log'), 'utf8');
   assert.match(debug, /deferred\.hand\.dispatch\.requested/);
@@ -109,10 +111,12 @@ test('single /control reaches execution-manager and the first hand for P-H1 only
   await completeActiveDispatch(workspace, hooks);
 
   const after = await readState(workspace);
-  assert.deepEqual(dispatched.map((entry) => entry.actor), ['feature-planner', 'planning-manager', 'execution-manager', 'docs-agent']);
+  assert.deepEqual(dispatched.map((entry) => entry.actor), ['feature-planner', 'planning-manager', 'execution-manager', 'docs-agent', 'browser-agent']);
   assert.ok(after.dispatchedCapabilityHands.includes('docs-agent'));
+  assert.ok(after.dispatchedCapabilityHands.includes('browser-agent'));
   assert.deepEqual(after.pendingCapabilityHands, ['docs-agent', 'browser-agent', 'code-agent', 'shell-agent', 'evidence-agent']);
-  assert.equal(after.activeDispatch?.actor, 'docs-agent');
+  assert.deepEqual(new Set(after.activeStepIds), new Set(['capability-hand:docs-agent', 'capability-hand:browser-agent']));
+  assert.equal(after.activeDispatch?.actor, 'browser-agent');
 
   await rm(workspace, { recursive: true, force: true });
 });

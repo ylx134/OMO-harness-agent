@@ -1,2 +1,2 @@
-// Runtime implemented in ../dist/index.js for now.
-export { server } from '../../dist/index.js';
+export { routeConfig, selectCapabilityHands, selectProbes } from '../runtime/server.js';
+export { compileRouteGraph } from './graph.js';

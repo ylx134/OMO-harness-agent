@@ -1,2 +1,1 @@
-// Runtime implemented in ../dist/index.js for now.
-export { server } from '../../dist/index.js';
+export { initializeHarnessTask } from '../runtime/server.js';

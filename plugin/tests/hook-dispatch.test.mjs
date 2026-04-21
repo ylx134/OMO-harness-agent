@@ -80,6 +80,15 @@ test('F-M1 command hook performs intake/state initialization without promptAsync
   assert.match(result.status, /Required Deliverables:/);
   assert.match(result.status, /Missing Deliverables:/);
   assert.match(result.status, /Route Blocking Gaps: none/);
+  assert.match(result.status, /Graph Runtime Summary/);
+  assert.match(result.status, /Active Step IDs: none/);
+  assert.match(result.status, /Ready Step IDs: manager:planning-manager/);
+  assert.match(result.status, /Blocked Step IDs: none/);
+  assert.match(result.status, /Held Locks: none/);
+  assert.match(result.status, /Signal Summary: 0 emitted, 0 pending/);
+  assert.match(result.status, /Legacy Compatibility View/);
+  assert.match(result.status, /Legacy Pending Managers: planning-manager, execution-manager, acceptance-manager/);
+  assert.match(result.status, /Legacy Deferred Dispatch State: ready/);
   assert.match(result.debug, /hook\.command\.before/);
   assert.match(result.debug, /state\.initialized\.from_command/);
   assert.match(result.debug, /dispatch\.deferred\.after_intake/);

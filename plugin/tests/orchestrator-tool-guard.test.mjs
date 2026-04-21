@@ -88,7 +88,7 @@ test('completed child managers cannot keep using tools after the route moves on 
       { tool: 'read', agent: 'planning-manager', sessionID: state.childDispatchSessionIDs?.planning?.[0] },
       { args: { path: '/tmp/example.txt' } },
     ),
-    /only the currently active deferred child actor may continue tool work/,
+    /only a live deferred child actor may continue tool work/,
   );
 
   await rm(workspace, { recursive: true, force: true });
