@@ -153,6 +153,7 @@ test('planning-manager can advance from durable workspace artifacts even if the 
   assert.deepEqual(dispatched.map((entry) => entry.actor), ['planning-manager', 'execution-manager']);
   assert.deepEqual(after.pendingManagers, ['execution-manager', 'acceptance-manager']);
   assert.equal(after.lastCompletedActor, 'planning-manager');
+  assert.equal(after.stepRuntime['manager:planning-manager']?.completionSource, 'workspace-artifact');
   assert.equal(after.activeDispatch?.actor, 'execution-manager');
 
   await rm(workspace, { recursive: true, force: true });

@@ -156,6 +156,10 @@ The human-readable route packet/status summary.
 
 Use this first when you want to understand where the route currently is.
 
+It now includes:
+- graph runtime summary fields: `activeStepIds`, `readyStepIds`, `blockedStepIds`, held locks, and signal summary
+- a legacy compatibility section so existing queue-based operator habits still work during migration
+
 ### 3. `.agent-memory/route-packet.json`
 The durable route contract.
 
@@ -172,8 +176,27 @@ Important fields include:
 - `pendingManagers`
 - `pendingCapabilityHands`
 - `pendingProbes`
+- `activeStepIds`
+- `readyStepIds`
+- `blockedStepIds`
+- `heldLocks`
+- `signalSummary`
+- `legacyCompat`
 
-### 4. `.agent-memory/harness-plugin-debug.log`
+The queue-shaped fields remain intentionally for one migration cycle so existing tooling does not break while operators gain graph visibility.
+
+### 4. `.agent-memory/managed-agent-state-index.json`
+The operator-oriented machine-readable status index.
+
+It now preserves the existing queue-oriented keys and adds:
+- `graph_runtime.active_step_ids`
+- `graph_runtime.ready_step_ids`
+- `graph_runtime.blocked_step_ids`
+- `graph_runtime.held_locks`
+- `graph_runtime.signal_summary`
+- `legacy_compat`
+
+### 5. `.agent-memory/harness-plugin-debug.log`
 The runtime truth source for plugin behavior.
 
 Use this when debugging:

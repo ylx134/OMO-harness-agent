@@ -26,6 +26,11 @@ Agents remain runtime role definitions.
 
 No immediate manager/hand/probe fan-out happens inside intake.
 
+The outward artifacts are now graph-aware while keeping the legacy queue view for compatibility during migration:
+- `orchestration-status.md` includes graph runtime summaries for `activeStepIds`, `readyStepIds`, `blockedStepIds`, held locks, and signal counts, plus a legacy compatibility section
+- `managed-agent-state-index.json` keeps the existing queue-shaped fields and adds `graph_runtime` plus `legacy_compat`
+- `route-packet.json` keeps the existing route contract fields and now exposes graph runtime fields and `legacyCompat`
+
 ### 2. Deferred progression
 The plugin now advances the route through explicit follow-up commands:
 - `/plan` consumes the next planning-stage manager from `pendingManagers`
@@ -73,6 +78,14 @@ Recommended checks after each stage:
 - inspect `.agent-memory/orchestration-status.md`
 - inspect `.agent-memory/route-packet.json`
 - inspect `.agent-memory/harness-plugin-debug.log`
+
+Key graph-aware fields now projected for operators:
+- `activeStepIds`
+- `readyStepIds`
+- `blockedStepIds`
+- `heldLocks`
+- signal summaries (`emitted` vs `pending`)
+- legacy queue compatibility fields (`pendingManagers`, `pendingCapabilityHands`, `pendingProbes`, `deferredDispatchState`, `activeDispatch`)
 
 The route is only fully complete when:
 - `currentPhase` becomes `complete`

@@ -1,2 +1,23 @@
-export const id = 'omo-harness-plugin';
-export { server } from '../dist/index.js';
+export {
+  id,
+  initializeHarnessTask,
+  routeConfig,
+  selectCapabilityHands,
+  selectProbes,
+  server,
+} from './runtime/server.js';
+
+export { compileRouteGraph } from './routing/graph.js';
+export { authorizeDeferredChildActor, actorForAuthorizedSession, listLiveDeferredSteps } from './dispatch/authorization.js';
+export { canStepCompleteFromSource, completeGraphStep } from './dispatch/completion.js';
+export { recoverGraphRuntimeState, recordStepRetryableError, stepIdForActorPhase } from './dispatch/recovery.js';
+export { loadPluginState, savePluginState } from './state/storage.js';
+export { ensureGraphState, migratePluginState } from './state/migration.js';
+export { projectLegacyState } from './state/legacy-projection.js';
+export {
+  buildManagedAgentIndexProjection,
+  buildRoutePacketProjection,
+  buildStatusProjection,
+} from './observability/projections.js';
+
+export { default } from './runtime/server.js';

@@ -1,2 +1,6 @@
-// Runtime implemented in ../dist/index.js for now.
-export { server } from '../../dist/index.js';
+export { server } from '../runtime/server.js';
+export {
+  buildManagedAgentIndexProjection,
+  buildRoutePacketProjection,
+  buildStatusProjection,
+} from './projections.js';
