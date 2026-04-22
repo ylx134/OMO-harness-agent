@@ -1,6 +1,8 @@
 # Concurrent Harness DAG Orchestration Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+>
+> Historical note (2026-04-22): this plan describes the migration into a graph runtime. The current plugin is already `plugin/src/**`-authored, packages a local routing table under `plugin/config/`, and no longer treats `plugin/dist/index.js` as the sole live baseline.
 
 **Goal:** Upgrade the Harness plugin from a single-flight deferred scheduler into a concurrent, dependency-aware orchestration runtime that can run multiple subagents in parallel, honor explicit dependencies and durable signals, recover safely after restarts, and still preserve the existing `/control` `/plan` `/drive` `/check` contract.
 

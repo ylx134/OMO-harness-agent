@@ -18,13 +18,15 @@ Agents remain runtime role definitions.
 ## Current Runtime Model
 
 ### 1. Intake
-`/control ...` performs intake only. It writes:
+`/control ...` always performs intake and writes:
 - `.agent-memory/harness-plugin-state.json`
 - `.agent-memory/orchestration-status.md`
 - `.agent-memory/managed-agent-state-index.json`
 - `.agent-memory/route-packet.json`
 
-No immediate manager/hand/probe fan-out happens inside intake.
+After intake, the runtime behaves in one of two ways:
+- default mode: it may auto-dispatch the first legal actor from deferred state
+- manual mode (`--manual`): it stops after intake so the operator can advance with `/plan`, `/drive`, and `/check`
 
 The outward artifacts are now graph-aware while keeping the legacy queue view for compatibility during migration:
 - `orchestration-status.md` includes graph runtime summaries for `activeStepIds`, `readyStepIds`, `blockedStepIds`, held locks, and signal counts, plus a legacy compatibility section
@@ -37,7 +39,13 @@ The plugin now advances the route through explicit follow-up commands:
 - `/drive` consumes `execution-manager` first, then selected capability hands one at a time
 - `/check` consumes `acceptance-manager`, then selected probes, then final acceptance closure
 
-This keeps runtime progression out of the original intake transaction and avoids the earlier `prompt_async failed` lifecycle conflict.
+This keeps deferred progression out of the original intake transaction and avoids the earlier `prompt_async failed` lifecycle conflict, while still allowing the runtime to auto-start the first legal actor when the route is not in manual mode.
+
+## Packaging Boundary
+
+- `plugin/src/**` is the authored runtime source
+- `plugin/dist/**` is generated build output
+- `plugin/config/routing-table.json` is the packaged runtime routing asset used outside the repo root
 
 ### 3. Top-level orchestrator constraints
 While a Harness route is active:
@@ -47,7 +55,7 @@ While a Harness route is active:
 
 ## Expected Command Sequences
 
-### F-M1 / C-M1 typical flow
+### F-M1 / C-M1 manual flow
 1. `/control ...`
 2. `/plan`
 3. `/drive` (dispatches `execution-manager`)
@@ -55,7 +63,7 @@ While a Harness route is active:
 5. `/check` (dispatches `acceptance-manager`)
 6. `/check` repeatedly for each selected probe and final closure
 
-### A-M1 typical flow
+### A-M1 manual flow
 1. `/control ...`
 2. `/plan` (dispatches `capability-planner`)
 3. `/plan` (dispatches `planning-manager`)
@@ -63,7 +71,7 @@ While a Harness route is active:
 5. `/drive` repeatedly for selected hands
 6. `/check` repeatedly for acceptance-manager, probes, and final closure
 
-### P-H1 typical flow
+### P-H1 manual flow
 1. `/control ...`
 2. `/plan` (dispatches `feature-planner`)
 3. `/plan` (dispatches `planning-manager`)

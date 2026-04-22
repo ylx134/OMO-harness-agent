@@ -1,6 +1,8 @@
 # Full Harness Plugin Architecture
 
 > For Claude: this is a full architecture target, not a minimal patch. The goal is to move the OMO harness from a skill-led coordination layer into a true plugin-led runtime orchestration system.
+>
+> Current note (2026-04-22): the live runtime is now authored under `plugin/src/**`, packaged with a local `plugin/config/routing-table.json`, and treats graph runtime state as authoritative while still projecting legacy queue fields for compatibility.
 
 ## 1. Goal
 

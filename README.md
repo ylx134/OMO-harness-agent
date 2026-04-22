@@ -75,25 +75,22 @@ python3 scripts/setup-opencode-profiles.py
 ### 2. Start Harness mode
 
 ```bash
-harness
+opencode-harness-pure --agent harness-orchestrator .
 ```
 
 Or point it at another project:
 
 ```bash
-harness /path/to/project
+opencode-harness-pure --agent harness-orchestrator /path/to/project
 ```
 
 ### 3. Run a real route
 
 ```text
 /control 修复构建报错并补上回归验证
-/plan
-/drive
-/check
 ```
 
-Then repeat `/drive` or `/check` as the route state requires.
+By default, `/control` may auto-dispatch the first legal actor once intake is stable. If you want pure intake-only initialization, use `--manual` and then advance with `/plan`, `/drive`, and `/check` yourself.
 
 ---
 
@@ -103,6 +100,7 @@ Then repeat `/drive` or `/check` as the route state requires.
 
 `setup.sh` installs the current local checkout into your OpenCode config by:
 
+- building the plugin package from `plugin/src/**` into `plugin/dist/**`
 - installing the local plugin package from `./plugin`
 - symlinking skills into `~/.config/opencode/skills`
 - symlinking hooks into `~/.config/opencode/hooks`
@@ -110,6 +108,7 @@ Then repeat `/drive` or `/check` as the route state requires.
 - merging `oh-my-opencode.json` categories/experimental settings
 - merging Harness agent entries into `oh-my-openagent.json`
 - registering the local plugin path in `opencode.json`
+- snapshotting the pre-install config so uninstall can restore prior user-owned values
 
 ### What `scripts/setup-opencode-profiles.py` does
 
@@ -120,7 +119,6 @@ It creates:
 - `opencode-harness`
 - `opencode-harness-pure`
 - `opencode-omo`
-- `harness`
 
 ### Uninstall
 
@@ -128,7 +126,7 @@ It creates:
 ./uninstall.sh
 ```
 
-This removes the linked skills/hooks/agent files and unregisters the local Harness plugin path.
+This removes the linked skills/hooks/agent files, unregisters the local Harness plugin path, and restores the pre-install config snapshot when one exists.
 
 ---
 
@@ -136,12 +134,11 @@ This removes the linked skills/hooks/agent files and unregisters the local Harne
 
 | Launcher | What it loads | When to use it |
 |---|---|---|
-| `harness` | `opencode-harness-pure --agent harness-orchestrator` | Recommended daily entrypoint |
 | `opencode-harness-pure` | Harness plugin only | Cleanest and most predictable Harness behavior |
 | `opencode-harness` | OMO + Harness plugin | Compatibility experiments or mixed behavior |
 | `opencode-omo` | `oh-my-openagent@latest` only | Original OMO/Sisyphus behavior with no Harness plugin |
 
-If you want the shortest and most stable command, use `harness`.
+If you want the cleanest Harness-only entrypoint, use `opencode-harness-pure --agent harness-orchestrator`.
 
 ---
 

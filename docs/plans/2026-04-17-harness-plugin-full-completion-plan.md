@@ -1,6 +1,8 @@
 # Harness Plugin Full Completion Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+>
+> Historical note (2026-04-22): this plan captures an earlier transition state. Keep it for migration context only; the current runtime is source-authored under `plugin/src/**` and package-local routing is no longer anchored on repo-root `plugin/dist/index.js` assumptions.
 
 **Goal:** Finish the Harness plugin from a stable intake/routing controller into a full runtime-governed orchestration system that safely advances manager → hand → probe → acceptance without OMO/Sisyphus contamination.
 
