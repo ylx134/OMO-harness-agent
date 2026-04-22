@@ -1,5 +1,6 @@
 // @ts-nocheck
 
+import { buildRouteFileContract } from '../state/file-contract.js';
 import { projectLegacyState } from '../state/legacy-projection.js';
 
 function normalizeList(values) {
@@ -46,8 +47,12 @@ function legacyCompatFromState(state) {
 }
 
 export function buildRoutePacketProjection(routeId, route, state) {
+  const contract = buildRouteFileContract({
+    route,
+    selectedProbes: state?.selectedProbes || route?.probes || [],
+  });
   const completedDeliverables = normalizeList(state?.completedDeliverables);
-  const missingDeliverables = normalizeList(route?.deliverables).filter((name) => !completedDeliverables.includes(name));
+  const missingDeliverables = normalizeList(contract.requiredDeliverables).filter((name) => !completedDeliverables.includes(name));
   const legacyCompat = legacyCompatFromState(state);
   const signalSummary = summarizeSignals(state?.signals || {});
 
@@ -61,11 +66,11 @@ export function buildRoutePacketProjection(routeId, route, state) {
     routingContractRow: `${routeId} | ${route.taskType} | ${route.flowTier} | managers=${route.managers.join(' -> ')}`,
     resolvedSkillStack: Array.from(new Set([...(route.managers || []), ...(state?.selectedCapabilityHands || []), ...(state?.selectedProbes || [])].filter(Boolean))),
     defaultMainRoute: routeId,
-    requiredStartupFiles: route.startupFiles,
-    requiredPlanningFiles: route.startupFiles.filter((name) => ['task.md', 'baseline-source.md', 'capability-map.md', 'gap-analysis.md', 'quality-guardrails.md', 'product-spec.md', 'features.json', 'features-summary.md', 'working-memory.md'].includes(name)).filter((name, index, values) => values.indexOf(name) === index),
-    requiredExecutionFiles: route.deliverables.filter((name) => ['round-contract.md', 'execution-status.md', 'evidence-ledger.md', 'task.md', 'features.json', 'features-summary.md', 'product-spec.md', 'baseline-source.md', 'capability-map.md', 'gap-analysis.md'].includes(name)).filter((name, index, values) => values.indexOf(name) === index),
-    requiredAcceptanceGates: Array.from(new Set([...(state?.selectedProbes || route.probes || []), 'acceptance-report.md', route.antiShallowBar].filter(Boolean))),
-    requiredDeliverables: route.deliverables,
+    requiredStartupFiles: contract.requiredStartupFiles,
+    requiredPlanningFiles: contract.requiredPlanningFiles,
+    requiredExecutionFiles: contract.requiredExecutionFiles,
+    requiredAcceptanceGates: contract.requiredAcceptanceGates,
+    requiredDeliverables: contract.requiredDeliverables,
     missingDeliverables,
     routeBlockingGaps: state?.blocked ? [state.blockedReason || 'blocked'] : [],
     pendingManagers: legacyCompat.pendingManagers,

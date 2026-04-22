@@ -6,4 +6,9 @@ export {
 } from './schema.js';
 export { loadPluginState, savePluginState } from './storage.js';
 export { ensureGraphState, migratePluginState } from './migration.js';
+export {
+  buildRouteFileContract,
+  detectCompletedDeliverables,
+  isPlaceholderDeliverable,
+} from './file-contract.js';
 export { projectLegacyState } from './legacy-projection.js';

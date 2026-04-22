@@ -3,6 +3,7 @@
     "module": "esnext",
     "target": "es2022",
     "moduleResolution": "bundler",
+    "types": ["node"],
     "strict": false,
     "declaration": false,
     "emitDeclarationOnly": false,

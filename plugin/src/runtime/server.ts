@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { promises as fs, readFileSync } from "fs";
+import { promises as fs } from "fs";
 import os from "os";
 import { DatabaseSync } from 'node:sqlite';
 import path from "path";
@@ -14,6 +14,14 @@ import {
   buildRoutePacketProjection,
   buildStatusProjection,
 } from '../observability/projections.js';
+import { routeConfig } from '../routing/table.js';
+import {
+  buildAcceptanceClosurePrompt,
+  buildCapabilityHandDispatchPrompt,
+  buildManagerDispatchPrompt,
+  buildProbeDispatchPrompt,
+} from './prompts.js';
+import { detectCompletedDeliverables } from '../state/file-contract.js';
 import { ensureGraphState } from '../state/migration.js';
 import { loadPluginState, savePluginState } from '../state/storage.js';
 
@@ -59,10 +67,6 @@ const MANAGER_SKILLS = {
   "acceptance-manager": ["check"],
 };
 
-const ROUTING_TABLE = JSON.parse(
-  readFileSync(new URL('../../../control/config/routing-table.json', import.meta.url), 'utf8'),
-);
-
 const AUTOPILOT_WATCHERS = new Map();
 
 function nowIso() {
@@ -85,10 +89,6 @@ async function ensureDir(p) {
 
 async function exists(p) {
   try { await fs.access(p); return true; } catch { return false; }
-}
-
-async function readText(p, fallback = "") {
-  try { return await fs.readFile(p, 'utf8'); } catch { return fallback; }
 }
 
 async function writeText(p, text) {
@@ -250,97 +250,6 @@ function buildTaskDocument(message, routeId, route, semanticLock) {
     '',
     `<!-- route:${routeId} semantic-lock:${semanticLock.status} -->`,
   ].join('\n');
-}
-
-export function routeConfig(routeId) {
-  const routes = ROUTING_TABLE.routes || {};
-  const route = routes[routeId] || routes['J-L1'];
-  return {
-    taskType: route.task_type,
-    flowTier: route.flow_tier,
-    managers: [...(route.manager_requirements || [])],
-    capability: [...(route.capability_requirements || [])],
-    probes: [...(route.probe_requirements || [])],
-    description: route.description,
-    startupFiles: [...(route.startup_files || [])],
-    deliverables: [...(route.deliverables || [])],
-    antiShallowBar: route.anti_shallow_bar,
-    executionMode: {
-      multiAgent: Boolean(route.execution_mode?.multi_agent),
-      singleThreadAllowed: Boolean(route.execution_mode?.single_thread_allowed),
-      requiresContractNegotiation: Boolean(route.execution_mode?.requires_contract_negotiation),
-    },
-    category: ROUTING_TABLE.category_mapping?.[route.task_type] || 'quick',
-  };
-}
-
-function planningFilesForRoute(route) {
-  return unique(route.startupFiles.filter((name) => ['task.md', 'baseline-source.md', 'capability-map.md', 'gap-analysis.md', 'quality-guardrails.md', 'product-spec.md', 'features.json', 'features-summary.md', 'working-memory.md'].includes(name)));
-}
-
-function executionFilesForRoute(route) {
-  return unique(route.deliverables.filter((name) => ['round-contract.md', 'execution-status.md', 'evidence-ledger.md', 'task.md', 'features.json', 'features-summary.md', 'product-spec.md', 'baseline-source.md', 'capability-map.md', 'gap-analysis.md'].includes(name)));
-}
-
-function acceptanceGatesForRoute(route, state) {
-  return unique([
-    ...(state?.selectedProbes || route.probes),
-    'acceptance-report.md',
-    route.antiShallowBar,
-  ]);
-}
-
-async function detectCompletedDeliverables(workspace, route) {
-  const placeholderContent = {
-    'task.md': '# Task\n\n',
-    'working-memory.md': '# Working Memory\n\n',
-    'round-contract.md': '# Round Contract\n\n',
-    'orchestration-status.md': '# Orchestration Status\n\n',
-    'execution-status.md': '# Execution Status\n\n',
-    'acceptance-report.md': '# Acceptance Report\n\n',
-    'evidence-ledger.md': '# Evidence Ledger\n\n',
-  };
-  const scaffoldMarkdownHeadings = {
-    'product-spec.md': 'product spec',
-    'features-summary.md': 'features summary',
-    'baseline-source.md': 'baseline source',
-    'capability-map.md': 'capability map',
-    'gap-analysis.md': 'gap analysis',
-  };
-  function isPlaceholderDeliverable(deliverable, content) {
-    const normalized = String(content || '');
-    const trimmed = normalized.trim();
-    if (!trimmed) return true;
-    if ((placeholderContent[deliverable] || null) === normalized) return true;
-
-    if (deliverable === 'features.json') {
-      try {
-        const parsed = JSON.parse(trimmed);
-        if ((Array.isArray(parsed) && parsed.length === 0) || (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && Object.keys(parsed).length === 0)) {
-          return true;
-        }
-      } catch {
-        return false;
-      }
-    }
-
-    const expectedHeading = scaffoldMarkdownHeadings[deliverable];
-    if (expectedHeading) {
-      const lines = trimmed.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-      if (lines.length === 1 && lines[0].toLowerCase() === `# ${expectedHeading}`) return true;
-    }
-
-    return false;
-  }
-  const completed = [];
-  for (const deliverable of route.deliverables) {
-    const deliverablePath = path.join(workspace, '.agent-memory', deliverable);
-    if (!(await exists(deliverablePath))) continue;
-    const content = await readText(deliverablePath, '');
-    if (isPlaceholderDeliverable(deliverable, content)) continue;
-    completed.push(deliverable);
-  }
-  return completed;
 }
 
 function buildRoutePacket(routeId, route, state) {
@@ -1138,49 +1047,7 @@ async function autoDispatchManager(client, workspace, state, managerName) {
   if (!client || !state || !managerName) return state;
   const { sessionID: targetSessionID } = await createChildDispatchSession(client, workspace, state, managerName, 'manager');
   const skills = MANAGER_SKILLS[managerName] || [];
-  const actionLines = managerName === 'feature-planner'
-    ? [
-        '- define or refine the product-level spec and release-critical journeys',
-        '- update product planning artifacts such as product-spec.md / features-summary.md when needed',
-      ]
-    : managerName === 'capability-planner'
-      ? [
-          '- define or refine baseline-source.md / capability-map.md / gap-analysis.md',
-          '- make hidden capability gaps explicit before execution begins',
-        ]
-      : managerName === 'planning-manager'
-        ? [
-            '- create or refine the planning contract',
-            '- update .agent-memory/task.md if needed',
-            '- set up the next bounded execution-ready contract',
-          ]
-        : managerName === 'execution-manager'
-          ? [
-              '- create or refine the current round contract',
-              '- dispatch the selected capability hands',
-              '- keep execution evidence and summaries consistent',
-            ]
-          : [
-              '- perform independent acceptance management',
-              '- dispatch the selected probes',
-              '- keep acceptance records and summaries consistent',
-            ];
-  const prompt = [
-    `You are being auto-dispatched by the Harness plugin as ${managerName}.`,
-    `Request ID: ${state.requestId}`,
-    `Route ID: ${state.routeId}`,
-    `Task Type: ${state.taskType}`,
-    `Flow Tier: ${state.flowTier}`,
-    `Raw User Input: ${state.rawUserInput}`,
-    `Required managers: ${state.requiredManagers.join(', ')}`,
-    `Selected capability hands: ${(state.selectedCapabilityHands || []).join(', ') || 'none'}`,
-    `Selected probes: ${(state.selectedProbes || []).join(', ') || 'none'}`,
-    `Suggested skills: ${skills.join(', ') || 'none'}`,
-    'Your required action:',
-    ...actionLines,
-    '- preserve harness role boundaries',
-    managerName === 'execution-manager' ? '- do not perform acceptance.' : '- do not collapse the route into one-thread execution.',
-  ].join('\n');
+  const prompt = buildManagerDispatchPrompt(managerName, state, skills);
   await client.session.promptAsync({
     path: { id: targetSessionID },
     query: { directory: workspace },
@@ -1198,19 +1065,7 @@ async function autoDispatchManager(client, workspace, state, managerName) {
 async function autoDispatchCapabilityHand(client, workspace, state, capabilityName = 'docs-agent') {
   if (!client || !state) return state;
   const { sessionID: targetSessionID } = await createChildDispatchSession(client, workspace, state, capabilityName, 'capability-hand');
-  const prompt = [
-    `You are being auto-dispatched by the Harness plugin as ${capabilityName}.`,
-    `Request ID: ${state.requestId}`,
-    `Route ID: ${state.routeId}`,
-    `Task Type: ${state.taskType}`,
-    `Flow Tier: ${state.flowTier}`,
-    `Raw User Input: ${state.rawUserInput}`,
-    'Your required action:',
-    '- perform narrow capability work only',
-    '- do not become a manager or acceptance judge',
-    '- write or support evidence relevant to your capability',
-    '- preserve harness role boundaries',
-  ].join('\n');
+  const prompt = buildCapabilityHandDispatchPrompt(capabilityName, state);
   await client.session.promptAsync({
     path: { id: targetSessionID },
     query: { directory: workspace },
@@ -1225,53 +1080,10 @@ async function autoDispatchCapabilityHand(client, workspace, state, capabilityNa
   };
 }
 
-async function autoDispatchAcceptanceManager(client, workspace, state) {
-  if (!client || !state) return state;
-  const { sessionID: targetSessionID } = await createChildDispatchSession(client, workspace, state, 'acceptance-manager', 'manager');
-  const prompt = [
-    'You are being auto-dispatched by the Harness plugin as acceptance-manager.',
-    `Request ID: ${state.requestId}`,
-    `Route ID: ${state.routeId}`,
-    `Task Type: ${state.taskType}`,
-    `Flow Tier: ${state.flowTier}`,
-    `Raw User Input: ${state.rawUserInput}`,
-    `Required probes: ${state.requiredProbes.join(', ')}`,
-    'Your required action:',
-    '- perform independent acceptance management',
-    '- dispatch at least one required probe',
-    '- do not perform implementation',
-    '- keep acceptance records and summaries consistent',
-  ].join('\n');
-  await client.session.promptAsync({
-    path: { id: targetSessionID },
-    query: { directory: workspace },
-    body: {
-      parts: [{ type: 'text', text: prompt }]
-    }
-  });
-  return {
-    targetSessionID,
-    phase: 'manager',
-    actor: 'acceptance-manager',
-  };
-}
-
 async function autoDispatchProbe(client, workspace, state, probeName = 'artifact-probe-agent') {
   if (!client || !state) return state;
   const { sessionID: targetSessionID } = await createChildDispatchSession(client, workspace, state, probeName, 'probe');
-  const prompt = [
-    `You are being auto-dispatched by the Harness plugin as ${probeName}.`,
-    `Request ID: ${state.requestId}`,
-    `Route ID: ${state.routeId}`,
-    `Task Type: ${state.taskType}`,
-    `Flow Tier: ${state.flowTier}`,
-    `Raw User Input: ${state.rawUserInput}`,
-    'Your required action:',
-    '- perform narrow verification work only',
-    '- collect evidence relevant to your probe',
-    '- do not issue final acceptance',
-    '- preserve harness role boundaries',
-  ].join('\n');
+  const prompt = buildProbeDispatchPrompt(probeName, state);
   await client.session.promptAsync({
     path: { id: targetSessionID },
     query: { directory: workspace },
@@ -1289,20 +1101,7 @@ async function autoDispatchProbe(client, workspace, state, probeName = 'artifact
 async function autoDispatchAcceptanceClosure(client, workspace, state) {
   if (!client || !state) return state;
   const { sessionID: targetSessionID } = await createChildDispatchSession(client, workspace, state, 'acceptance-manager', 'acceptance-closure');
-  const prompt = [
-    'You are being re-dispatched by the Harness plugin as acceptance-manager for final closure.',
-    `Request ID: ${state.requestId}`,
-    `Route ID: ${state.routeId}`,
-    `Task Type: ${state.taskType}`,
-    `Flow Tier: ${state.flowTier}`,
-    `Dispatched capability hands: ${(state.dispatchedCapabilityHands || []).join(', ') || 'none'}`,
-    `Dispatched probes: ${(state.dispatchedProbes || []).join(', ') || 'none'}`,
-    'Your required action:',
-    '- consume probe results and acceptance evidence',
-    '- issue final acceptance closure',
-    '- update acceptance artifacts if needed',
-    '- do not reopen implementation unless a real blocker is found',
-  ].join('\n');
+  const prompt = buildAcceptanceClosurePrompt(state);
   await client.session.promptAsync({
     path: { id: targetSessionID },
     query: { directory: workspace },

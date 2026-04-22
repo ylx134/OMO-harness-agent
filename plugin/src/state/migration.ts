@@ -6,6 +6,7 @@ import {
   CURRENT_STATE_SCHEMA_VERSION,
   createDefaultStepRuntime,
   normalizeStepRuntime,
+  TERMINAL_STEP_STATUSES,
 } from './schema.js';
 
 function childDispatchDefaults(existing = {}) {
@@ -130,16 +131,26 @@ export function ensureGraphState(state) {
     childDispatchSessionIDs,
     graphRuntimeRollout,
   });
+  const closureStepId = 'acceptance-closure:acceptance-manager';
+  const closurePending = Boolean(graph.steps?.[closureStepId])
+    && !TERMINAL_STEP_STATUSES.has(stepRuntime[closureStepId]?.status || 'pending');
 
   const compat = {
     activeDispatch: projected.activeDispatch,
     pendingManagers: projected.pendingManagers,
     pendingCapabilityHands: projected.pendingCapabilityHands,
     pendingProbes: projected.pendingProbes,
-    nextExpectedActor: projected.nextExpectedActor,
+    nextExpectedActor: state.blocked
+      ? 'none'
+      : projected.pendingManagers[0]
+        || projected.pendingCapabilityHands[0]
+        || projected.pendingProbes[0]
+        || (closurePending ? 'acceptance-manager' : 'none'),
     deferredDispatchState: projected.deferredDispatchState,
     childDispatchSessionIDs,
   };
+
+  const nextExpectedActor = compat.nextExpectedActor;
 
   const activeStepIds = Object.entries(stepRuntime)
     .filter(([, runtime]) => ['dispatching', 'in_progress', 'waiting'].includes(runtime.status))
@@ -161,10 +172,10 @@ export function ensureGraphState(state) {
     graphRuntimeRollout,
     childDispatchSessionIDs,
     compat,
-    pendingManagers: state.pendingManagers || projected.pendingManagers,
-    pendingCapabilityHands: state.pendingCapabilityHands || projected.pendingCapabilityHands,
-    pendingProbes: state.pendingProbes || projected.pendingProbes,
-    nextExpectedActor: state.nextExpectedActor || projected.nextExpectedActor,
+    pendingManagers: projected.pendingManagers,
+    pendingCapabilityHands: projected.pendingCapabilityHands,
+    pendingProbes: projected.pendingProbes,
+    nextExpectedActor,
     deferredDispatchState: state.deferredDispatchState || projected.deferredDispatchState,
     activeDispatch: state.activeDispatch || projected.activeDispatch,
   };

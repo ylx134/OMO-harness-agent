@@ -5,10 +5,17 @@
   "type": "module",
   "main": "./index.js",
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "node ./scripts/sync-routing-table.mjs && tsc -p tsconfig.build.json",
     "pretest": "npm run build",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
+  "files": [
+    "config",
+    "dist",
+    "index.js",
+    "README.md"
+  ],
   "exports": {
     ".": "./index.js"
   },
@@ -16,6 +23,7 @@
     "@opencode-ai/plugin": "^1.4.6"
   },
   "devDependencies": {
+    "@types/node": "^24.5.2",
     "typescript": "^6.0.3"
   }
 }

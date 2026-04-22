@@ -1,12 +1,12 @@
 export {
   id,
   initializeHarnessTask,
-  routeConfig,
   selectCapabilityHands,
   selectProbes,
   server,
 } from './runtime/server.js';
 
+export { routeConfig } from './routing/table.js';
 export { compileRouteGraph } from './routing/graph.js';
 export { authorizeDeferredChildActor, actorForAuthorizedSession, listLiveDeferredSteps } from './dispatch/authorization.js';
 export { canStepCompleteFromSource, completeGraphStep } from './dispatch/completion.js';
