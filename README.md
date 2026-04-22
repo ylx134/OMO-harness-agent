@@ -1,194 +1,239 @@
 # OMO Harness Agent
 
-A managed-agents runtime for OpenCode that turns `/control` into a real orchestration entrypoint instead of a prompt convention.
+OMO Harness Agent turns OpenCode from a prompt-only workflow into a managed, route-driven runtime. Instead of asking one generalist agent to do everything, it gives you a real control plane for intake, planning, execution, acceptance, retries, deliverables, and operator-visible state.
 
-This repo started as an OMO/OpenCode skill pack and has been upgraded into a plugin-governed Harness runtime with:
-- authoritative route selection
-- durable route/state artifacts
-- deferred manager/hand/probe progression
-- deliverable-aware acceptance gating
-- retry-safe dispatch state
-- isolated runtime profiles for Harness vs OMO
+At a practical level, this repo gives you:
 
-In practice, this means you can drive structured work like:
-- fix flows (`F-M1`)
-- bounded refactors (`C-M1`)
-- deep capability upgrades (`A-M1`)
-- product-surface builds (`P-H1`)
+- a local Harness plugin that intercepts `/control`, `/plan`, `/drive`, and `/check`
+- a layered managed-agents model with brain, managers, hands, and probes
+- durable `.agent-memory/` state and route artifacts
+- graph-aware progression with bounded concurrency, lock-aware execution, signals, and graph-based closure gating
+- isolated launcher profiles so Harness mode and OMO mode do not blur together
 
-through explicit command progression instead of hoping one generalist agent behaves correctly.
+---
 
-## What this repo gives you
+## What this system is
 
-At a high level, the system now provides:
+Harness mode is built around one idea: **`/control` should initialize and supervise work, not pretend to finish it in one prompt.**
 
-1. A real Harness plugin
-- intercepts `/control`, `/plan`, `/drive`, `/check`
-- writes authoritative `.agent-memory/` state
-- owns route packet generation and queue progression
+The runtime now treats structured work as an explicit route:
 
-2. A layered managed-agents architecture
-- L1 brain: `harness-orchestrator`
-- L2 managers: `feature-planner`, `capability-planner`, `planning-manager`, `execution-manager`, `acceptance-manager`
-- L3 hands: `docs-agent`, `browser-agent`, `code-agent`, `shell-agent`, `evidence-agent`
-- L4 probes: `ui-probe-agent`, `api-probe-agent`, `regression-probe-agent`, `artifact-probe-agent`
+- **`F-M1`** — fix something already broken
+- **`C-M1`** — bounded internal change or refactor
+- **`A-M1`** — deeper capability upgrade
+- **`P-H1`** — product-surface or journey-heavy work
 
-3. Deferred orchestration
-- `/control` performs intake only
-- `/plan` advances planning-stage managers
-- `/drive` advances execution-manager first, then capability hands one step at a time
-- `/check` advances acceptance-manager, then probes, then final closure
+Each route moves through intake, planning, execution, acceptance, and final closure with state you can inspect at any time.
 
-4. Real completion semantics
-- route state is not allowed to claim `complete` just because queues are empty
-- required deliverables must exist with non-placeholder content
-- missing deliverables block final closure and leave a retryable state
+---
 
-## Current runtime model
+## Architecture at a glance
 
-### Intake
-`/control ...` writes the authoritative route initialization only.
+```mermaid
+flowchart TB
+    U[User] --> C[/control/]
+    C --> B[harness-orchestrator]
+    B --> M1[planning-stage managers]
+    M1 --> M2[execution-manager]
+    M2 --> H[capability hands]
+    H --> A[acceptance-manager]
+    A --> P[probes]
+    P --> F[acceptance closure]
+    F --> DONE[route complete]
 
-Artifacts created under `.agent-memory/`:
-- `harness-plugin-state.json`
-- `orchestration-status.md`
-- `managed-agent-state-index.json`
-- `route-packet.json`
-- `brain-brief.md`
-- `route-summary.md`
+    C -.writes.-> S[.agent-memory state]
+    M1 -.updates.-> S
+    M2 -.updates.-> S
+    H -.updates.-> S
+    A -.updates.-> S
+    P -.updates.-> S
+    F -.updates.-> S
+```
 
-### Deferred progression
-Progression happens through follow-up commands:
-- `/plan` -> consume the next planning-stage manager
-- `/drive` -> consume `execution-manager` first, then selected capability hands one by one
-- `/check` -> consume `acceptance-manager`, then probes one by one, then final acceptance closure
+### Runtime layers
 
-### Dispatch isolation
-Deferred actor dispatches are now sent to child sessions rather than the parent orchestration session.
+- **L1 brain**: `harness-orchestrator`
+- **L2 managers**: `feature-planner`, `capability-planner`, `planning-manager`, `execution-manager`, `acceptance-manager`
+- **L3 hands**: `docs-agent`, `browser-agent`, `code-agent`, `shell-agent`, `evidence-agent`
+- **L4 probes**: `ui-probe-agent`, `api-probe-agent`, `regression-probe-agent`, `artifact-probe-agent`
 
-That means:
-- the parent session owns queue/state progression
-- managers/hands/probes run in child sessions
-- parent commands stay short and predictable
-- same-session `prompt_async` collisions are reduced
+The plugin is the control plane. Skills define behavior. Hooks enforce integrity. Agents provide role separation.
 
-### Retry-safe behavior
-If a dispatch fails:
-- the pending queue is not advanced incorrectly
-- the actor is not falsely marked complete
-- `deferredDispatchState` becomes `retryable_error`
-- `lastDispatchError` records actor, phase, message, and time
-- the same follow-up command can retry the failed actor safely
+---
+
+## Quick start
+
+### 1. Clone and install
+
+```bash
+git clone git@github.com:ylx134/OMO-harness-agent.git
+cd OMO-harness-agent
+./setup.sh
+python3 scripts/setup-opencode-profiles.py
+```
+
+### 2. Start Harness mode
+
+```bash
+harness
+```
+
+Or point it at another project:
+
+```bash
+harness /path/to/project
+```
+
+### 3. Run a real route
+
+```text
+/control 修复构建报错并补上回归验证
+/plan
+/drive
+/check
+```
+
+Then repeat `/drive` or `/check` as the route state requires.
+
+---
+
+## Installation details
+
+### What `./setup.sh` does
+
+`setup.sh` installs the current local checkout into your OpenCode config by:
+
+- installing the local plugin package from `./plugin`
+- symlinking skills into `~/.config/opencode/skills`
+- symlinking hooks into `~/.config/opencode/hooks`
+- symlinking harness agent files into `~/.config/opencode/agents/agent`
+- merging `oh-my-opencode.json` categories/experimental settings
+- merging Harness agent entries into `oh-my-openagent.json`
+- registering the local plugin path in `opencode.json`
+
+### What `scripts/setup-opencode-profiles.py` does
+
+This creates isolated launch profiles under `~/.config/opencode-profiles/` and launcher scripts under `~/.local/bin/`.
+
+It creates:
+
+- `opencode-harness`
+- `opencode-harness-pure`
+- `opencode-omo`
+- `harness`
+
+### Uninstall
+
+```bash
+./uninstall.sh
+```
+
+This removes the linked skills/hooks/agent files and unregisters the local Harness plugin path.
+
+---
+
+## Which launcher should you use?
+
+| Launcher | What it loads | When to use it |
+|---|---|---|
+| `harness` | `opencode-harness-pure --agent harness-orchestrator` | Recommended daily entrypoint |
+| `opencode-harness-pure` | Harness plugin only | Cleanest and most predictable Harness behavior |
+| `opencode-harness` | OMO + Harness plugin | Compatibility experiments or mixed behavior |
+| `opencode-omo` | `oh-my-openagent@latest` only | Original OMO/Sisyphus behavior with no Harness plugin |
+
+If you want the shortest and most stable command, use `harness`.
+
+---
+
+## Command lifecycle
+
+```mermaid
+flowchart LR
+    C[/control/] --> I[Intake only]
+    I --> R[Route selected + state written]
+    R --> P[/plan/]
+    P --> PM[Planning-stage managers]
+    PM --> D[/drive/]
+    D --> EM[execution-manager]
+    EM --> H[capability hands<br/>bounded concurrency + locks]
+    H --> K[/check/]
+    K --> AM[acceptance-manager]
+    AM --> PR[probes<br/>bounded concurrency]
+    PR --> CL[acceptance closure<br/>graph terminal + deliverables]
+    CL --> X[complete]
+```
+
+### What each command really means
+
+- **`/control`**: intake only. It chooses the route, writes authoritative state, and starts the first legal actor if the mode allows it.
+- **`/plan`**: advances the planning stage.
+- **`/drive`**: advances execution. It dispatches `execution-manager` first, then eligible capability hands subject to current budgets and held locks.
+- **`/check`**: advances acceptance. It dispatches `acceptance-manager`, then eligible probes, then closure once the graph is terminal and deliverables are real.
+
+---
 
 ## Route families
 
-### `F-M1` — fix route
-Use for:
-- build failures
-- regressions
-- broken paths that must stop failing
+| Route | Use when | Planning path | Execution / acceptance behavior |
+|---|---|---|---|
+| `F-M1` | something is broken and must stop failing | `planning-manager` | fix-oriented execution, evidence, regression + artifact probes |
+| `C-M1` | scoped internal change or bounded refactor | `planning-manager` | behavior-preserving execution, bounded acceptance |
+| `A-M1` | a deeper capability must become real | `capability-planner` -> `planning-manager` | capability-first execution with stronger planning upfront |
+| `P-H1` | a product surface or broader journey is being built | `feature-planner` -> `planning-manager` | strongest route, product-oriented execution, no silent single-thread fallback |
 
-Typical command sequence:
-1. `/control 修复构建报错并补上回归验证`
-2. `/plan`
-3. `/drive`
-4. `/drive` repeated for selected hands
-5. `/check`
-6. `/check` repeated for probes and final closure
+---
 
-### `C-M1` — bounded refactor/change route
-Use for:
-- scoped internal changes
-- behavior-preserving refactors
-- bounded subsystem adjustments
+## What gets written to `.agent-memory/`
 
-Typical sequence:
-1. `/control ...`
-2. `/plan`
-3. `/drive` until execution steps finish
-4. `/check` until probes and closure finish
+These files are the operator-facing source of truth during a run.
 
-### `A-M1` — capability route
-Use for:
-- hidden backend/system capability upgrades
-- deep functional capability work that is not obvious from the UI alone
+### `harness-plugin-state.json`
 
-Typical sequence:
-1. `/control ...`
-2. `/plan` (dispatches `capability-planner`)
-3. `/plan` (dispatches `planning-manager`)
-4. `/drive` repeatedly
-5. `/check` repeatedly
+The authoritative machine-readable runtime state.
 
-### `P-H1` — product route
-Use for:
-- larger product-surface work
-- wider user journey implementation
-- release-like product increments
+Key fields include:
 
-Typical sequence:
-1. `/control ...`
-2. `/plan` (dispatches `feature-planner`)
-3. `/plan` (dispatches `planning-manager`)
-4. `/drive` repeatedly
-5. `/check` repeatedly
-
-## The key files you should inspect
-
-### 1. `.agent-memory/harness-plugin-state.json`
-The authoritative machine-readable route state.
-
-Important fields:
 - `routeId`
 - `currentPhase`
 - `nextExpectedActor`
-- `pendingManagers`
-- `pendingCapabilityHands`
-- `pendingProbes`
 - `deferredDispatchState`
-- `lastCompletedActor`
-- `lastDispatchError`
 - `completedDeliverables`
-- `childDispatchSessionIDs`
-
-### 2. `.agent-memory/orchestration-status.md`
-The human-readable route packet/status summary.
-
-Use this first when you want to understand where the route currently is.
-
-It now includes:
-- graph runtime summary fields: `activeStepIds`, `readyStepIds`, `blockedStepIds`, held locks, and signal summary
-- a legacy compatibility section so existing queue-based operator habits still work during migration
-
-### 3. `.agent-memory/route-packet.json`
-The durable route contract.
-
-Important fields include:
-- `reasonForLane`
-- `routingContractRow`
-- `resolvedSkillStack`
-- `requiredStartupFiles`
-- `requiredPlanningFiles`
-- `requiredExecutionFiles`
-- `requiredAcceptanceGates`
-- `requiredDeliverables`
-- `missingDeliverables`
-- `pendingManagers`
-- `pendingCapabilityHands`
-- `pendingProbes`
+- `graph`
+- `stepRuntime`
 - `activeStepIds`
 - `readyStepIds`
 - `blockedStepIds`
 - `heldLocks`
-- `signalSummary`
-- `legacyCompat`
+- `signals`
+- `childDispatchSessionIDs`
 
-The queue-shaped fields remain intentionally for one migration cycle so existing tooling does not break while operators gain graph visibility.
+### `orchestration-status.md`
 
-### 4. `.agent-memory/managed-agent-state-index.json`
-The operator-oriented machine-readable status index.
+The human-readable summary for operators.
 
-It now preserves the existing queue-oriented keys and adds:
+It includes both:
+
+- **Graph Runtime Summary** — active/ready/blocked steps, held locks, signal counts
+- **Legacy Compatibility View** — queue-shaped fields like `pendingManagers`, `pendingCapabilityHands`, `pendingProbes`, `deferredDispatchState`, and `activeDispatch`
+
+### `route-packet.json`
+
+The durable route contract.
+
+This includes:
+
+- route meaning (`reasonForLane`, `routingContractRow`)
+- required startup/planning/execution/acceptance files
+- required deliverables and current missing deliverables
+- graph runtime fields
+- legacy compatibility projection
+
+### `managed-agent-state-index.json`
+
+The machine-readable operator status index.
+
+This preserves queue-oriented compatibility fields while also exposing:
+
 - `graph_runtime.active_step_ids`
 - `graph_runtime.ready_step_ids`
 - `graph_runtime.blocked_step_ids`
@@ -196,107 +241,79 @@ It now preserves the existing queue-oriented keys and adds:
 - `graph_runtime.signal_summary`
 - `legacy_compat`
 
-### 5. `.agent-memory/harness-plugin-debug.log`
-The runtime truth source for plugin behavior.
+### `harness-plugin-debug.log`
 
-Use this when debugging:
+The runtime truth source when something looks wrong.
+
+Use it to inspect:
+
 - command intake
-- deferred dispatch requests
+- dispatch requests
 - duplicate dispatch skips
-- retryable dispatch errors
+- retryable errors
 - deliverable-gated closure blocking
 
-## Installation
+---
 
-### Install the repo
-```bash
-git clone git@github.com:ylx134/OMO-harness-agent.git
-cd OMO-harness-agent
-./setup.sh
-```
+## Concurrency, locks, and signals
 
-### Create the isolated launch profiles
-```bash
-python3 scripts/setup-opencode-profiles.py
-```
+The current runtime is no longer purely queue-serial.
 
-This creates three launchers in `~/.local/bin/`:
-- `opencode-harness`
-- `opencode-harness-pure`
-- `opencode-omo`
+### Capability hands
 
-And one convenience shortcut:
-- `harness`
+Capability hands can fan out **within bounded concurrency** when their required locks do not conflict.
 
-## Which launcher should you use?
+Current conservative lock groups include:
 
-### `harness`
-The shortest and recommended daily command.
+- `workspace-write`
+- `build-runner`
+- `docs-write`
+- `evidence-write`
 
-Equivalent to:
-```bash
-opencode-harness-pure --agent harness-orchestrator .
-```
+### Probes
 
-If no argument is passed, it starts in the current directory.
+Probes can also run with bounded concurrency after `acceptance-manager` has completed.
 
-### `opencode-harness-pure`
-Harness-only runtime.
+### Signals
 
-Loads only the local Harness plugin.
+Graph steps can emit durable signals. A blocked step can stay idle until both:
 
-Use this when you want the cleanest, most stable Harness behavior.
+- its step dependencies are complete
+- its signal dependencies are emitted
 
-Recommended default:
-```bash
-opencode-harness-pure --agent harness-orchestrator .
-```
+This is how wait/wake behavior works without relying on paused child sessions.
 
-### `opencode-harness`
-Mixed profile.
+---
 
-Loads:
-- OMO
-- Harness plugin
+## Completion semantics
 
-Useful for compatibility experiments, but noisier than pure Harness.
+Harness is intentionally stricter than “the queues are empty”.
 
-### `opencode-omo`
-OMO-only runtime.
+A route is fully complete only when:
 
-Loads only `oh-my-openagent@latest`.
+- `currentPhase` is `complete`
+- `nextExpectedActor` is `none`
+- the graph has no remaining live or required terminal work
+- required deliverables exist
+- placeholder/scaffold files do **not** falsely count as completed deliverables
 
-Use this when you want original OMO/Sisyphus behavior with no Harness plugin involvement.
+If required deliverables are still missing, closure stays blocked or retryable by design.
 
-### `opencode`
-The default global OpenCode entrypoint.
+Healthy final state usually looks like:
 
-Its behavior depends on your default config under `~/.config/opencode/`.
-If you want predictable Harness behavior, prefer `harness` or `opencode-harness-pure` instead.
+- `currentPhase: "complete"`
+- `nextExpectedActor: "none"`
+- `pendingManagers: []`
+- `pendingCapabilityHands: []`
+- `pendingProbes: []`
+- `deferredDispatchState: "complete"`
+- `missingDeliverables: []`
 
-## Recommended usage
+---
 
-### Start Harness mode in the current project
-```bash
-harness
-```
+## Typical flows
 
-### Start Harness mode in a different directory
-```bash
-harness /path/to/project
-```
-
-### Pure Harness headless server
-```bash
-opencode-harness-pure serve --port 4123
-```
-
-### OMO-only interactive mode
-```bash
-opencode-omo .
-```
-
-## Example end-to-end `F-M1` flow
+### `F-M1` fix flow
 
 ```text
 /control 修复构建报错并补上回归验证
@@ -304,24 +321,12 @@ opencode-omo .
 /drive
 /drive
 /drive
-/drive
-/check
 /check
 /check
 /check
 ```
 
-Healthy final state looks like:
-- `currentPhase: "complete"`
-- `nextExpectedActor: "none"`
-- `pendingManagers: []`
-- `pendingCapabilityHands: []`
-- `pendingProbes: []`
-- `deferredDispatchState: "complete"`
-
-If required artifacts are still missing, final closure will be blocked intentionally and the route will stay retryable instead of falsely claiming completion.
-
-## Example end-to-end `P-H1` flow
+### `P-H1` product flow
 
 ```text
 /control 为现有系统搭建一个完整产品级功能，覆盖关键用户旅程与发布质量
@@ -330,55 +335,38 @@ If required artifacts are still missing, final closure will be blocked intention
 /drive
 /drive
 /drive
-/drive
-/drive
-/drive
-/check
-/check
 /check
 /check
 /check
 ```
 
-## Why completion may be blocked on purpose
+The exact number of `/drive` and `/check` repetitions depends on the selected managers, hands, probes, lock conflicts, and deliverable state.
 
-The plugin now treats deliverables as part of completion semantics.
+---
 
-That means:
-- empty scaffold files do not count as completed deliverables
-- routes are not allowed to enter `complete` until required artifacts are real
-- final closure can stop with:
-  - `deferredDispatchState: retryable_error`
-  - `lastDispatchError.actor: acceptance-manager`
-  - `lastDispatchError.phase: acceptance-closure`
+## How to verify a live run
 
-This is intentional and correct.
+If something looks wrong, check in this order:
 
-## Current status of the project
+1. `.agent-memory/harness-plugin-state.json`
+2. `.agent-memory/orchestration-status.md`
+3. `.agent-memory/route-packet.json`
+4. `.agent-memory/managed-agent-state-index.json`
+5. `.agent-memory/harness-plugin-debug.log`
 
-What is already done:
-- stable intake-only `/control`
-- authoritative route packet generation
-- deferred queue progression through `/plan`, `/drive`, `/check`
-- child-session dispatch for actors
-- deliverable reconciliation and closure gating
-- retry-safe error handling
-- isolated Harness / OMO launch profiles
-- pure Harness runtime validation
+For plugin-local validation, this repo’s main check is:
 
-What is still realistic to improve later:
-- cleaner human-readable retry guidance
-- smarter deliverable semantic validation
-- optional auto-progression mode
-- provider-aware fallback / budget handling
+```bash
+npm --prefix plugin test
+```
 
-The core runtime itself is already in a usable state.
+---
 
 ## Repository structure
 
 ```text
 omo-harness-skills/
-├── control/                    # L1 orchestration contracts and routing tables
+├── control/                    # route selection and orchestration contracts
 ├── plan/                       # planning-manager skill
 ├── drive/                      # execution-manager skill
 ├── check/                      # acceptance-manager skill
@@ -394,7 +382,7 @@ omo-harness-skills/
 ├── regression-probe-agent/
 ├── artifact-probe-agent/
 ├── hooks/
-├── plugin/
+├── plugin/                     # Harness runtime control plane
 ├── agents/
 ├── docs/
 ├── setup.sh
@@ -402,15 +390,7 @@ omo-harness-skills/
 └── scripts/setup-opencode-profiles.py
 ```
 
-## If something looks wrong
-
-Check in this order:
-1. `.agent-memory/harness-plugin-state.json`
-2. `.agent-memory/orchestration-status.md`
-3. `.agent-memory/route-packet.json`
-4. `.agent-memory/harness-plugin-debug.log`
-
-When debugging live runs, prefer those artifacts over broad log substring matches.
+---
 
 ## Recommended default
 
@@ -420,4 +400,6 @@ If you want the shortest, cleanest, most stable daily entrypoint:
 harness
 ```
 
-That is the current recommended way to use this project.
+If you want the cleanest mental model, remember just this:
+
+> `harness` starts Harness-only mode, `/control` initializes a route, and `/plan` / `/drive` / `/check` advance it step by step until the graph and deliverables say it is truly done.
