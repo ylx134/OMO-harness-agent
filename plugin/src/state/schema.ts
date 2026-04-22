@@ -1,4 +1,3 @@
-// @ts-nocheck
 export const CURRENT_STATE_SCHEMA_VERSION = 2;
 
 export const TERMINAL_STEP_STATUSES = new Set([
@@ -7,7 +6,18 @@ export const TERMINAL_STEP_STATUSES = new Set([
   'skipped',
 ]);
 
-export function createDefaultStepRuntime(overrides = {}) {
+type StepRuntimeShape = {
+  status?: string;
+  attemptCount?: number;
+  activeSessionID?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  lastProgressAt?: string | null;
+  completionSource?: string | null;
+  lastError?: unknown;
+};
+
+export function createDefaultStepRuntime(overrides: StepRuntimeShape = {}) {
   return {
     status: 'pending',
     attemptCount: 0,
@@ -21,8 +31,8 @@ export function createDefaultStepRuntime(overrides = {}) {
   };
 }
 
-export function normalizeStepRuntime(graph, stepRuntime = {}) {
-  const normalized = {};
+export function normalizeStepRuntime(graph: { steps?: Record<string, unknown> } | undefined, stepRuntime: Record<string, StepRuntimeShape> = {}) {
+  const normalized: Record<string, StepRuntimeShape> = {};
   for (const stepId of Object.keys(graph?.steps || {})) {
     normalized[stepId] = createDefaultStepRuntime(stepRuntime[stepId] || {});
   }

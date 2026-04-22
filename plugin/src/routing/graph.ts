@@ -1,14 +1,24 @@
-// @ts-nocheck
-
 import { resourceLocksForStep } from '../dispatch/concurrency.js';
-function phaseForManager(actor) {
+import type { GraphStep, RouteConfigShape, RouteGraph, StepKind } from '../types.js';
+
+type CompileRouteGraphOptions = {
+  routeId: string;
+  route?: RouteConfigShape;
+  managers?: string[];
+  selectedCapabilityHands?: string[];
+  selectedProbes?: string[];
+  taskType?: string | null;
+  flowTier?: string | null;
+};
+
+function phaseForManager(actor: string) {
   if (actor === 'execution-manager') return 'execution';
   if (actor === 'acceptance-manager') return 'acceptance';
   return 'planning';
 }
 
-function createStep(id, actor, kind, phase, dependsOnStepIds = []) {
-  const step = {
+function createStep(id: string, actor: string, kind: StepKind, phase: string, dependsOnStepIds: string[] = []): GraphStep {
+  const step: GraphStep = {
     id,
     actor,
     kind,
@@ -37,16 +47,16 @@ export function compileRouteGraph({
   selectedProbes,
   taskType,
   flowTier,
-}) {
+}: CompileRouteGraphOptions): RouteGraph {
   const managerActors = [...(managers || route?.managers || [])];
   const handActors = [...(selectedCapabilityHands || route?.capability || [])];
   const probeActors = [...(selectedProbes || route?.probes || [])];
   const preAcceptanceManagers = managerActors.filter((actor) => actor !== 'acceptance-manager');
   const acceptanceManagers = managerActors.filter((actor) => actor === 'acceptance-manager');
 
-  const steps = {};
-  let previousStepId = null;
-  const handStepIds = [];
+  const steps: Record<string, GraphStep> = {};
+  let previousStepId: string | null = null;
+  const handStepIds: string[] = [];
 
   for (const actor of preAcceptanceManagers) {
     const id = `manager:${actor}`;

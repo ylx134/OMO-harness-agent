@@ -1,6 +1,15 @@
-// @ts-nocheck
+import type { GraphStateLike, GraphStep, RouteGraph, StepRuntime } from '../types.js';
 
 const LIVE_STEP_STATUSES = new Set(['dispatching', 'in_progress', 'waiting']);
+
+type LiveStep = GraphStep & { stepId: string };
+
+type HeldLocks = Record<string, string>;
+
+type SelectionOptions = {
+  budget?: number;
+  heldLocks?: HeldLocks;
+};
 
 export function boundedDispatchBudgets() {
   return {
@@ -10,7 +19,7 @@ export function boundedDispatchBudgets() {
   };
 }
 
-export function resourceLocksForStep(step = {}) {
+export function resourceLocksForStep(step: Partial<GraphStep> = {}) {
   if (step.kind !== 'capability-hand') return [];
   if (step.actor === 'shell-agent') return ['workspace-write', 'build-runner'];
   if (step.actor === 'code-agent') return ['workspace-write'];
@@ -19,18 +28,18 @@ export function resourceLocksForStep(step = {}) {
   return [];
 }
 
-export function isLiveStepRuntime(runtime = {}) {
+export function isLiveStepRuntime(runtime: Partial<StepRuntime> = {}) {
   return LIVE_STEP_STATUSES.has(runtime.status);
 }
 
-export function listLiveStepIds(state) {
+export function listLiveStepIds(state: GraphStateLike) {
   return Object.entries(state?.stepRuntime || {})
     .filter(([, runtime]) => isLiveStepRuntime(runtime))
     .map(([stepId]) => stepId);
 }
 
-export function deriveHeldLocks(graph, stepRuntime = {}) {
-  const heldLocks = {};
+export function deriveHeldLocks(graph: RouteGraph | undefined, stepRuntime: Record<string, StepRuntime> = {}) {
+  const heldLocks: HeldLocks = {};
   for (const [stepId, runtime] of Object.entries(stepRuntime || {})) {
     if (!isLiveStepRuntime(runtime)) continue;
     for (const lockName of graph?.steps?.[stepId]?.resourceLocks || []) {
@@ -40,17 +49,20 @@ export function deriveHeldLocks(graph, stepRuntime = {}) {
   return heldLocks;
 }
 
-export function activeStepsForState(state) {
-  return (state?.activeStepIds || listLiveStepIds(state))
-    .map((stepId) => ({ stepId, ...(state?.graph?.steps?.[stepId] || {}) }))
-    .filter((step) => step.stepId && step.kind);
+export function activeStepsForState(state: GraphStateLike): LiveStep[] {
+  return (state?.activeStepIds || listLiveStepIds(state)).reduce<LiveStep[]>((steps, stepId) => {
+    const graphStep = state?.graph?.steps?.[stepId];
+    if (!graphStep) return steps;
+    steps.push({ stepId, ...graphStep });
+    return steps;
+  }, []);
 }
 
-export function hasExclusiveLiveStep(state) {
+export function hasExclusiveLiveStep(state: GraphStateLike) {
   return activeStepsForState(state).some((step) => step.kind !== 'capability-hand');
 }
 
-export function selectRunnableCapabilityHandSteps(state, options = {}) {
+export function selectRunnableCapabilityHandSteps(state: GraphStateLike, options: SelectionOptions = {}) {
   const readyStepIds = new Set(state?.readyStepIds || []);
   const heldLocks = { ...(state?.heldLocks || {}), ...(options.heldLocks || {}) };
   const activeHands = activeStepsForState(state).filter((step) => step.kind === 'capability-hand');
@@ -59,7 +71,7 @@ export function selectRunnableCapabilityHandSteps(state, options = {}) {
   if (availableSlots <= 0) return [];
   if (hasExclusiveLiveStep(state)) return [];
 
-  const selected = [];
+  const selected: Array<{ stepId: string; actor: string; kind: 'capability-hand'; reason: string }> = [];
   const plannedLocks = { ...heldLocks };
 
   for (const actor of state?.pendingCapabilityHands || []) {
@@ -79,7 +91,7 @@ export function selectRunnableCapabilityHandSteps(state, options = {}) {
   return selected;
 }
 
-export function selectRunnableProbeSteps(state, options = {}) {
+export function selectRunnableProbeSteps(state: GraphStateLike, options: SelectionOptions = {}) {
   const readyStepIds = new Set(state?.readyStepIds || []);
   const activeSteps = activeStepsForState(state);
   const activeProbes = activeSteps.filter((step) => step.kind === 'probe');
@@ -88,7 +100,7 @@ export function selectRunnableProbeSteps(state, options = {}) {
   if (availableSlots <= 0) return [];
   if (activeSteps.some((step) => step.kind !== 'probe')) return [];
 
-  const selected = [];
+  const selected: Array<{ stepId: string; actor: string; kind: 'probe'; reason: string }> = [];
 
   for (const actor of state?.pendingProbes || []) {
     const stepId = Object.entries(state?.graph?.steps || {}).find(([, step]) => step.actor === actor && step.kind === 'probe')?.[0];
