@@ -26,8 +26,8 @@ function createGraphState() {
     currentPhase: 'execution',
     blocked: false,
     blockedReason: '',
-    requiredManagers: ['planning-manager', 'execution-manager', 'acceptance-manager'],
-    pendingManagers: ['execution-manager', 'acceptance-manager'],
+    requiredManagers: ['planning-manager', 'execution-manager', 'acceptance-manager', 'summary-manager'],
+    pendingManagers: ['execution-manager', 'acceptance-manager', 'summary-manager'],
     dispatchedManagers: ['planning-manager'],
     requiredCapabilityHands: ['shell-agent', 'code-agent', 'evidence-agent'],
     selectedCapabilityHands: ['shell-agent', 'code-agent', 'evidence-agent'],
@@ -181,7 +181,7 @@ test('buildStatusProjection renders graph runtime summary alongside legacy compa
   assert.match(status, /Emitted Signals: build-artifacts-ready/);
   assert.match(status, /Pending Signals: verification-summary-ready/);
   assert.match(status, /Legacy Compatibility View/);
-  assert.match(status, /Legacy Pending Managers: acceptance-manager/);
+	  assert.match(status, /Legacy Pending Managers: acceptance-manager, summary-manager/);
   assert.match(status, /Legacy Pending Capability Hands: shell-agent, code-agent, evidence-agent/);
   assert.match(status, /Legacy Pending Probes: regression-probe-agent, artifact-probe-agent/);
   assert.match(status, /Legacy Deferred Dispatch State: hand_in_progress/);
@@ -218,7 +218,7 @@ test('buildRoutePacketProjection keeps legacy compat visible without letting sta
 
   const routePacket = plugin.buildRoutePacketProjection('F-M1', route, state);
 
-  assert.deepEqual(routePacket.pendingManagers, ['acceptance-manager']);
+	  assert.deepEqual(routePacket.pendingManagers, ['acceptance-manager', 'summary-manager']);
   assert.deepEqual(routePacket.pendingCapabilityHands, ['shell-agent', 'code-agent', 'evidence-agent']);
   assert.deepEqual(routePacket.pendingProbes, ['regression-probe-agent', 'artifact-probe-agent']);
   assert.equal(routePacket.deferredDispatchState, 'hand_in_progress');

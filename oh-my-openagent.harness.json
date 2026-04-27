@@ -17,6 +17,10 @@
       "model": "openai/gpt-5.4",
       "variant": "high"
     },
+    "summary-manager": {
+      "model": "openai/gpt-5.4",
+      "variant": "high"
+    },
     "capability-hand": {
       "model": "openai/gpt-5.4-mini",
       "variant": "medium"

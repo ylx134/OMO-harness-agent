@@ -23,8 +23,8 @@ test('buildManagedAgentIndexProjection adds graph runtime fields without removin
     nextExpectedActor: 'docs-agent',
     blocked: false,
     blockedReason: '',
-    requiredManagers: ['capability-planner', 'planning-manager', 'execution-manager', 'acceptance-manager'],
-    pendingManagers: ['acceptance-manager'],
+    requiredManagers: ['capability-planner', 'planning-manager', 'execution-manager', 'acceptance-manager', 'summary-manager'],
+	    pendingManagers: ['acceptance-manager', 'summary-manager'],
     dispatchedManagers: ['capability-planner', 'planning-manager', 'execution-manager'],
     requiredCapabilityHands: ['docs-agent', 'code-agent', 'shell-agent', 'evidence-agent'],
     selectedCapabilityHands: ['docs-agent', 'code-agent', 'shell-agent', 'evidence-agent'],
@@ -101,7 +101,7 @@ test('buildManagedAgentIndexProjection adds graph runtime fields without removin
   const index = plugin.buildManagedAgentIndexProjection(state);
 
   assert.equal(index.route.route_id, 'A-M1');
-  assert.deepEqual(index.pending_manager_dispatch, ['acceptance-manager']);
+	  assert.deepEqual(index.pending_manager_dispatch, ['acceptance-manager', 'summary-manager']);
   assert.deepEqual(index.pending_capability_hands, ['docs-agent', 'code-agent', 'shell-agent']);
   assert.deepEqual(index.pending_probes, ['api-probe-agent', 'regression-probe-agent', 'artifact-probe-agent']);
   assert.equal(index.deferred_dispatch_state, 'ready');
@@ -121,7 +121,7 @@ test('buildManagedAgentIndexProjection adds graph runtime fields without removin
   assert.deepEqual(index.legacy_compat, {
     next_expected_actor: 'docs-agent',
     deferred_dispatch_state: 'ready',
-    pending_managers: ['acceptance-manager'],
+	    pending_managers: ['acceptance-manager', 'summary-manager'],
     pending_capability_hands: ['docs-agent', 'code-agent', 'shell-agent'],
     pending_probes: ['api-probe-agent', 'regression-probe-agent', 'artifact-probe-agent'],
     active_dispatch: {

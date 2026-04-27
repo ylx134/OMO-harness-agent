@@ -185,7 +185,7 @@ async function seedState(workspace) {
     pendingManagers: ['acceptance-manager'],
     pendingCapabilityHands: ['docs-agent', 'shell-agent'],
     pendingProbes: [],
-    requiredManagers: ['execution-manager', 'acceptance-manager'],
+    requiredManagers: ['execution-manager', 'acceptance-manager', 'summary-manager'],
     requiredCapabilityHands: ['docs-agent', 'shell-agent'],
     selectedCapabilityHands: ['docs-agent', 'shell-agent'],
     requiredProbes: [],

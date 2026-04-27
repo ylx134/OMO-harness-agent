@@ -52,20 +52,24 @@ test('route-packet missingDeliverables shrinks when expected artifact files alre
   await initializeFRoute(workspace);
 
   const routePacket = JSON.parse(await readFile(path.join(workspace, '.agent-memory', 'route-packet.json'), 'utf8'));
-  assert.deepEqual(routePacket.requiredDeliverables, [
-    'round-contract.md',
-    'execution-status.md',
-    'evidence-ledger.md',
-    'acceptance-report.md',
-  ]);
-  assert.deepEqual(routePacket.missingDeliverables, ['acceptance-report.md']);
+	  assert.deepEqual(routePacket.requiredDeliverables, [
+	    'round-contract.md',
+	    'execution-status.md',
+	    'evidence-ledger.md',
+	    'acceptance-report.md',
+	    'final-summary.md',
+	    'handoff-summary.md',
+	  ]);
+	  assert.deepEqual(routePacket.missingDeliverables, ['acceptance-report.md', 'final-summary.md', 'handoff-summary.md']);
 
   await rm(workspace, { recursive: true, force: true });
 });
 
 test('completed route with all deliverables present reports empty missingDeliverables', async () => {
-  const workspace = await setupWorkspaceWithArtifacts();
-  await writeFile(path.join(workspace, '.agent-memory', 'acceptance-report.md'), '# Acceptance Report\n');
+	  const workspace = await setupWorkspaceWithArtifacts();
+	  await writeFile(path.join(workspace, '.agent-memory', 'acceptance-report.md'), '# Acceptance Report\n');
+	  await writeFile(path.join(workspace, '.agent-memory', 'final-summary.md'), '# Final Summary\nreal content\n');
+	  await writeFile(path.join(workspace, '.agent-memory', 'handoff-summary.md'), '# Handoff Summary\nreal content\n');
   await initializeFRoute(workspace);
 
   const routePacket = JSON.parse(await readFile(path.join(workspace, '.agent-memory', 'route-packet.json'), 'utf8'));
@@ -92,10 +96,12 @@ test('product route placeholder scaffolds do not count as completed deliverables
     'features.json',
     'features-summary.md',
     'round-contract.md',
-    'execution-status.md',
-    'evidence-ledger.md',
-    'acceptance-report.md',
-  ]);
+	    'execution-status.md',
+	    'evidence-ledger.md',
+	    'acceptance-report.md',
+	    'final-summary.md',
+	    'handoff-summary.md',
+	  ]);
 
   await rm(workspace, { recursive: true, force: true });
 });
@@ -115,10 +121,12 @@ test('capability route placeholder scaffolds do not count as completed deliverab
     'capability-map.md',
     'gap-analysis.md',
     'round-contract.md',
-    'execution-status.md',
-    'evidence-ledger.md',
-    'acceptance-report.md',
-  ]);
+	    'execution-status.md',
+	    'evidence-ledger.md',
+	    'acceptance-report.md',
+	    'final-summary.md',
+	    'handoff-summary.md',
+	  ]);
 
   await rm(workspace, { recursive: true, force: true });
 });

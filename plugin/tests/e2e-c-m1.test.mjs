@@ -115,21 +115,27 @@ test('E2E C-M1: full lifecycle from /control to route completion', async () => {
     await completeStep(workspace, hooks);
   }
 
-  // acceptance closure
-  state = await readState(workspace);
-  if (state.activeDispatch?.actor === 'acceptance-manager' && state.activeDispatch?.phase === 'acceptance-closure') {
-    await completeStep(workspace, hooks);
-    state = await readState(workspace);
-  }
+	  // summary-manager
+	  state = await readState(workspace);
+	  assert.equal(state.activeDispatch?.actor, 'summary-manager');
+	  await completeStep(workspace, hooks);
+
+	  // acceptance closure
+	  state = await readState(workspace);
+	  if (state.activeDispatch?.actor === 'acceptance-manager' && state.activeDispatch?.phase === 'acceptance-closure') {
+	    await completeStep(workspace, hooks);
+	    state = await readState(workspace);
+	  }
 
   assert.equal(state.currentPhase, 'complete');
   assert.equal(state.deferredDispatchState, 'complete');
   assert.equal(state.nextExpectedActor, 'none');
 
   const dispatchedActors = dispatched.map(d => d.actor).filter(Boolean);
-  assert.ok(dispatchedActors.includes('planning-manager'));
-  assert.ok(dispatchedActors.includes('execution-manager'));
-  assert.ok(dispatchedActors.includes('acceptance-manager'));
+	  assert.ok(dispatchedActors.includes('planning-manager'));
+	  assert.ok(dispatchedActors.includes('execution-manager'));
+	  assert.ok(dispatchedActors.includes('acceptance-manager'));
+	  assert.ok(dispatchedActors.includes('summary-manager'));
 
   const activity = await readFile(path.join(workspace, '.agent-memory', 'activity.jsonl'), 'utf8');
   assert.match(activity, /route\.completed/);

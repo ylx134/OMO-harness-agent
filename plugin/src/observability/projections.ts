@@ -34,6 +34,15 @@ function summarizeSignals(signals = {}) {
   };
 }
 
+function summarizeStandardEvents(events = []) {
+  const normalized = Array.isArray(events) ? events : [];
+  return {
+    total: normalized.length,
+    latest: normalized[normalized.length - 1] || null,
+    actors: Array.from(new Set(normalized.map((event) => event.actor).filter(Boolean))),
+  };
+}
+
 function legacyCompatFromState(state) {
   const projected = projectLegacyState(state || {});
   return {
@@ -63,6 +72,8 @@ export function buildRoutePacketProjection(routeId, route, state) {
   const missingDeliverables = normalizeList(contract.requiredDeliverables).filter((name) => !completedDeliverables.includes(name));
   const legacyCompat = legacyCompatFromState(state);
   const signalSummary = summarizeSignals(state?.signals || {});
+  const progressSummary = summarizeStandardEvents(state?.progressSignals || []);
+  const handoffSummary = summarizeStandardEvents(state?.handoffSignals || []);
 
   return {
     routeId,
@@ -71,8 +82,8 @@ export function buildRoutePacketProjection(routeId, route, state) {
     semanticLockStatus: state?.semanticLockStatus || 'locked',
     semanticLockText: state?.semanticLockText || '',
     reasonForLane: route.description,
-    routingContractRow: `${routeId} | ${route.taskType} | ${route.flowTier} | managers=${route.managers.join(' -> ')}`,
-    resolvedSkillStack: Array.from(new Set([...(route.managers || []), ...(state?.selectedCapabilityHands || []), ...(state?.selectedProbes || [])].filter(Boolean))),
+    routingContractRow: `${routeId} | ${route.taskType} | ${route.flowTier} | managers=${(state?.requiredManagers || route.managers || []).join(' -> ')}`,
+    resolvedSkillStack: Array.from(new Set([...(state?.requiredManagers || route.managers || []), ...(state?.selectedCapabilityHands || []), ...(state?.selectedProbes || [])].filter(Boolean))),
     defaultMainRoute: routeId,
     requiredStartupFiles: contract.requiredStartupFiles,
     requiredPlanningFiles: contract.requiredPlanningFiles,
@@ -93,6 +104,8 @@ export function buildRoutePacketProjection(routeId, route, state) {
     blockedStepIds: normalizeList(state?.blockedStepIds),
     heldLocks: { ...(state?.heldLocks || {}) },
     signalSummary,
+    progressSummary,
+    handoffSummary,
     legacyCompat,
   };
 }
@@ -100,6 +113,8 @@ export function buildRoutePacketProjection(routeId, route, state) {
 export function buildManagedAgentIndexProjection(state, options = {}) {
   const legacyCompat = legacyCompatFromState(state);
   const signalSummary = summarizeSignals(state?.signals || {});
+  const progressSummary = summarizeStandardEvents(state?.progressSignals || []);
+  const handoffSummary = summarizeStandardEvents(state?.handoffSignals || []);
 
   return {
     version: 2,
@@ -142,6 +157,8 @@ export function buildManagedAgentIndexProjection(state, options = {}) {
         emitted_signal_names: signalSummary.emittedSignalNames,
         pending_signal_names: signalSummary.pendingSignalNames,
       },
+      progress_summary: progressSummary,
+      handoff_summary: handoffSummary,
     },
     legacy_compat: {
       next_expected_actor: legacyCompat.nextExpectedActor,
@@ -170,6 +187,8 @@ export function buildManagedAgentIndexProjection(state, options = {}) {
 export function buildStatusProjection(state, routePacket) {
   const legacyCompat = routePacket?.legacyCompat || legacyCompatFromState(state);
   const signalSummary = routePacket?.signalSummary || summarizeSignals(state?.signals || {});
+  const progressSummary = routePacket?.progressSummary || summarizeStandardEvents(state?.progressSignals || []);
+  const handoffSummary = routePacket?.handoffSummary || summarizeStandardEvents(state?.handoffSignals || []);
   const activeDispatch = legacyCompat.activeDispatch
     ? `${legacyCompat.activeDispatch.actor} (${legacyCompat.activeDispatch.phase || 'unknown'}) session=${legacyCompat.activeDispatch.sessionID || 'none'}`
     : 'none';
@@ -212,6 +231,10 @@ export function buildStatusProjection(state, routePacket) {
     `- Signal Summary: ${signalSummary.emitted} emitted, ${signalSummary.pending} pending`,
     `- Emitted Signals: ${formatList(signalSummary.emittedSignalNames)}`,
     `- Pending Signals: ${formatList(signalSummary.pendingSignalNames)}`,
+    `- Progress Events: ${progressSummary.total}`,
+    `- Progress Actors: ${formatList(progressSummary.actors)}`,
+    `- Handoff Events: ${handoffSummary.total}`,
+    `- Handoff Actors: ${formatList(handoffSummary.actors)}`,
     '',
     '## Legacy Compatibility View',
     `- Legacy Pending Managers: ${formatList(legacyCompat.pendingManagers)}`,

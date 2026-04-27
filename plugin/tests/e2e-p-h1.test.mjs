@@ -86,7 +86,7 @@ test('E2E P-H1: full lifecycle from /control to route completion', async () => {
   assert.equal(state.taskType, '产品型');
   assert.equal(state.flowTier, '重流程');
   // P-H1 has feature-planner first
-  assert.deepEqual(state.pendingManagers, ['feature-planner', 'planning-manager', 'execution-manager', 'acceptance-manager']);
+  assert.deepEqual(state.pendingManagers, ['feature-planner', 'planning-manager', 'execution-manager', 'acceptance-manager', 'summary-manager']);
 
   // Walk through full lifecycle step by step
   let stuck = 0;

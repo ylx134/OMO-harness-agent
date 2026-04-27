@@ -10,6 +10,7 @@ import { reconcileRuntime } from '../dispatch/reconcile.js';
 import { markStepInProgress, recordStepRetryableError, stepIdForActorPhase } from '../dispatch/recovery.js';
 import { guardFileWrite } from '../dispatch/phase-guard.js';
 import { lazyProvisionIfNeeded } from '../dispatch/lazy-provision.js';
+import { applyStandardSignalEvents, parseStandardSignalEvents } from '../dispatch/standard-signals.js';
 import { createGraphRuntimeRollout, isManualHarnessMode, rolloutBudgetsForState } from '../mode/index.js';
 import {
   buildManagedAgentIndexProjection,
@@ -37,6 +38,7 @@ const HARNESS_AGENTS = new Set([
   "planning-manager",
   "execution-manager",
   "acceptance-manager",
+  "summary-manager",
 ]);
 
 const MANAGER_AGENTS = new Set([
@@ -45,6 +47,7 @@ const MANAGER_AGENTS = new Set([
   "planning-manager",
   "execution-manager",
   "acceptance-manager",
+  "summary-manager",
 ]);
 
 const CAPABILITY_AGENTS = new Set([
@@ -68,6 +71,7 @@ const MANAGER_SKILLS = {
   "planning-manager": ["plan"],
   "execution-manager": ["drive", "memory"],
   "acceptance-manager": ["check"],
+  "summary-manager": ["memory"],
 };
 
 const AUTOPILOT_WATCHERS = new Map();
@@ -272,6 +276,10 @@ function unique(values) {
   return Array.from(new Set((values || []).filter(Boolean)));
 }
 
+function requiredManagersForRoute(route) {
+  return unique([...(route?.managers || []), 'summary-manager']);
+}
+
 function includesAny(message, keywords) {
   return keywords.some((keyword) => message.includes(keyword));
 }
@@ -405,6 +413,7 @@ function actorForSession(state, sessionID = '') {
   }
   if ((child.execution || []).includes(sessionID)) return 'execution-manager';
   if ((child.acceptance || []).includes(sessionID)) return 'acceptance-manager';
+  if ((child.summary || []).includes(sessionID)) return 'summary-manager';
   for (const [actor, sessions] of Object.entries(child.capabilityHands || {})) {
     if ((sessions || []).includes(sessionID)) return actor;
   }
@@ -450,6 +459,9 @@ function buildSystemAdditions(agent, state = null) {
   if (agent === "acceptance-manager") {
     return ["[harness-manager] You are acceptance-manager. You must require the selected probes before acceptance may complete."];
   }
+  if (agent === "summary-manager") {
+    return ["[harness-manager] You are summary-manager. Own final synthesis: consume progress and handoff signals, write final-summary.md and handoff-summary.md, then complete without doing implementation."];
+  }
   return [];
 }
 
@@ -468,6 +480,8 @@ async function initMemoryScaffold(workspace) {
     'route-summary.md': '# Route Summary\n\n',
     'risk-summary.md': '# Risk Summary\n\n',
     'acceptance-summary.md': '# Acceptance Summary\n\n',
+    'final-summary.md': '# Final Summary\n\n',
+    'handoff-summary.md': '# Handoff Summary\n\n',
     'task.md': '# Task\n\n',
     'working-memory.md': '# Working Memory\n\n',
     'round-contract.md': '# Round Contract\n\n',
@@ -482,6 +496,10 @@ async function initMemoryScaffold(workspace) {
   }
   const idx = path.join(inboxDir, 'index.jsonl');
   if (!(await exists(idx))) await writeText(idx, '');
+  for (const jsonl of ['progress-events.jsonl', 'handoff-events.jsonl', 'completion-events.jsonl']) {
+    const f = path.join(memoryDir, jsonl);
+    if (!(await exists(f))) await writeText(f, '');
+  }
 
   const initScript = path.join(workspace, 'init.sh');
   if (!(await exists(initScript))) {
@@ -498,6 +516,7 @@ export async function initializeHarnessTask(workspace, message, agent, routeIdOv
   await initMemoryScaffold(workspace);
   const routeId = routeIdOverride || classifyTask(message);
   const route = routeConfig(routeId);
+  const requiredManagers = requiredManagersForRoute(route);
   const semanticLock = resolveSemanticLock(message, routeId, route);
   const reqId = requestId();
   const completedDeliverables = await detectCompletedDeliverables(workspace, route);
@@ -512,9 +531,9 @@ export async function initializeHarnessTask(workspace, message, agent, routeIdOv
     taskType: route.taskType,
     flowTier: route.flowTier,
     currentPhase: semanticLock.status === 'locked' ? 'intake' : 'blocked',
-    nextExpectedActor: semanticLock.status === 'locked' ? deriveNextExpectedActor({ compat: undefined, nextExpectedActor: undefined, pendingManagers: route.managers }) : 'none',
-    requiredManagers: route.managers,
-    pendingManagers: [...route.managers],
+    nextExpectedActor: semanticLock.status === 'locked' ? deriveNextExpectedActor({ compat: undefined, nextExpectedActor: undefined, pendingManagers: requiredManagers }) : 'none',
+    requiredManagers,
+    pendingManagers: [...requiredManagers],
     dispatchedManagers: [],
     requiredCapabilityHands: route.capability,
     selectedCapabilityHands,
@@ -727,6 +746,136 @@ async function appendPluginDebug(workspace, label, payload = {}) {
   await appendText(path.join(workspace, '.agent-memory', 'harness-plugin-debug.log'), `[${nowIso()}] ${label} ${JSON.stringify(payload)}\n`);
 }
 
+async function appendJsonlEvents(workspace, fileName, events = []) {
+  for (const event of events || []) {
+    await appendText(path.join(workspace, '.agent-memory', fileName), JSON.stringify(event) + '\n');
+  }
+}
+
+async function recordStandardSignalsFromMessage(workspace, state, authorization, sessionID, message) {
+  const parsed = parseStandardSignalEvents(message, {
+    state,
+    actor: authorization.actor,
+    phase: authorization.phase,
+    stepId: authorization.stepId,
+    sessionID,
+    at: nowIso(),
+  });
+
+  if (!parsed.hasSignals) {
+    return { state, hasSignals: false, hasCompletion: false };
+  }
+
+  await appendJsonlEvents(workspace, 'progress-events.jsonl', parsed.progress);
+  await appendJsonlEvents(workspace, 'handoff-events.jsonl', parsed.handoff);
+  await appendJsonlEvents(workspace, 'completion-events.jsonl', parsed.completion);
+
+  const nextState = applyStandardSignalEvents(state, parsed);
+  await savePluginState(workspace, nextState);
+  await syncManagedAgentIndex(workspace);
+  await syncStatusFromState(workspace);
+  await appendPluginDebug(workspace, 'standard.signals.recorded', {
+    actor: authorization.actor,
+    stepId: authorization.stepId,
+    progress: parsed.progress.length,
+    handoff: parsed.handoff.length,
+    completion: parsed.completion.length,
+  });
+
+  return { state: nextState, hasSignals: true, hasCompletion: parsed.hasCompletion };
+}
+
+function formatSignalList(events = []) {
+  if (!events.length) return '- none';
+  return events.map((event) => {
+    const bits = [
+      event.at || '',
+      event.actor || '',
+      event.status || '',
+      event.summary || '',
+    ].filter(Boolean);
+    const line = bits.join(' | ');
+    const extras = [];
+    if ((event.artifacts || []).length) extras.push(`artifacts=${event.artifacts.join(', ')}`);
+    if ((event.blockers || []).length) extras.push(`blockers=${event.blockers.join(', ')}`);
+    if ((event.nextActions || []).length) extras.push(`next=${event.nextActions.join(', ')}`);
+    return `- ${line}${extras.length ? ` (${extras.join('; ')})` : ''}`;
+  }).join('\n');
+}
+
+async function hasNonPlaceholderText(filePath, heading) {
+  if (!(await exists(filePath))) return false;
+  const text = await fs.readFile(filePath, 'utf8');
+  const trimmed = text.trim();
+  return Boolean(trimmed && trimmed !== `# ${heading}`);
+}
+
+async function ensureFinalSummaryArtifacts(workspace, state) {
+  const finalPath = path.join(workspace, '.agent-memory', 'final-summary.md');
+  const handoffPath = path.join(workspace, '.agent-memory', 'handoff-summary.md');
+  const progress = state?.progressSignals || [];
+  const handoffs = state?.handoffSignals || [];
+  const completions = state?.completionSignals || [];
+  const activeActors = [
+    ...(state?.dispatchedManagers || []),
+    ...(state?.dispatchedCapabilityHands || []),
+    ...(state?.dispatchedProbes || []),
+  ];
+
+  if (!(await hasNonPlaceholderText(finalPath, 'Final Summary'))) {
+    await writeText(finalPath, [
+      '# Final Summary',
+      '',
+      `Request ID: ${state.requestId || 'unknown'}`,
+      `Route ID: ${state.routeId || 'unknown'}`,
+      `Task Type: ${state.taskType || 'unknown'}`,
+      `Flow Tier: ${state.flowTier || 'unknown'}`,
+      '',
+      '## Participating Actors',
+      '',
+      formatSection(unique(activeActors)),
+      '',
+      '## Progress Signals',
+      '',
+      formatSignalList(progress),
+      '',
+      '## Handoff Signals',
+      '',
+      formatSignalList(handoffs),
+      '',
+      '## Completion Signals',
+      '',
+      formatSignalList(completions),
+      '',
+    ].join('\n'));
+  }
+
+  if (!(await hasNonPlaceholderText(handoffPath, 'Handoff Summary'))) {
+    const blockers = unique(handoffs.flatMap((event) => event.blockers || []));
+    const nextActions = unique(handoffs.flatMap((event) => event.nextActions || []));
+    const artifacts = unique(handoffs.flatMap((event) => event.artifacts || []));
+    await writeText(handoffPath, [
+      '# Handoff Summary',
+      '',
+      `Request ID: ${state.requestId || 'unknown'}`,
+      `Route ID: ${state.routeId || 'unknown'}`,
+      '',
+      '## Artifacts',
+      '',
+      formatSection(artifacts),
+      '',
+      '## Blockers',
+      '',
+      formatSection(blockers),
+      '',
+      '## Next Actions',
+      '',
+      formatSection(nextActions),
+      '',
+    ].join('\n'));
+  }
+}
+
 async function createChildDispatchSession(client, workspace, state, actor, phase) {
   if (!client?.session?.create) {
     throw new Error(`child session creation is unavailable for ${actor}; concrete harness work must run in a subagent`);
@@ -748,7 +897,13 @@ async function createChildDispatchSession(client, workspace, state, actor, phase
 function recordChildDispatchSession(state, actor, phase, sessionID) {
   const next = { ...(state.childDispatchSessionIDs || {}) };
   if (phase === 'manager') {
-    const bucket = actor === 'execution-manager' ? 'execution' : actor === 'acceptance-manager' ? 'acceptance' : 'planning';
+    const bucket = actor === 'execution-manager'
+      ? 'execution'
+      : actor === 'acceptance-manager'
+        ? 'acceptance'
+        : actor === 'summary-manager'
+          ? 'summary'
+          : 'planning';
     next[bucket] = [...(next[bucket] || []), sessionID];
     return next;
   }
@@ -782,6 +937,7 @@ function activeDispatchMatches(state, agent, sessionID = '') {
 function completedManagerPhase(managerName) {
   if (managerName === 'execution-manager') return 'execution';
   if (managerName === 'acceptance-manager') return 'acceptance';
+  if (managerName === 'summary-manager') return 'summary';
   return 'planning';
 }
 
@@ -1252,7 +1408,7 @@ async function dispatchNextDeferredManager(client, workspace, state, requestedMa
       },
     },
     dispatchedManagers: Array.from(new Set([...(state.dispatchedManagers || []), manager])),
-    currentPhase: manager === 'execution-manager' ? 'execution' : manager === 'acceptance-manager' ? 'acceptance' : 'planning',
+    currentPhase: completedManagerPhase(manager),
     nextExpectedActor: deriveNextExpectedActor({ ...state, compat: undefined, nextExpectedActor: undefined, activeDispatch: { ...state.activeDispatch, actor: manager, phase: 'manager', stepId: stepIdForActorPhase(state, manager, 'manager') }, pendingManagers: state.pendingManagers, pendingCapabilityHands: state.pendingCapabilityHands, pendingProbes: state.pendingProbes }),
     deferredDispatchState: 'manager_in_progress',
     lastDispatchError: null,
@@ -1438,17 +1594,20 @@ async function completeDeferredManager(workspace, state, managerName, completion
   });
   if (!completed.changed) return completed.state;
   const pendingManagers = withoutFirst(completed.state.pendingManagers, managerName);
-  const nextState = {
-    ...completed.state,
-    pendingManagers,
-    activeDispatch: null,
-    currentPhase: completedManagerPhase(managerName),
+	  const nextState = {
+	    ...completed.state,
+	    pendingManagers,
+	    activeDispatch: null,
+	    currentPhase: completedManagerPhase(managerName),
     nextExpectedActor: deriveNextExpectedActor({ ...completed.state, compat: undefined, nextExpectedActor: undefined, activeDispatch: null, pendingManagers, pendingCapabilityHands: completed.state.pendingCapabilityHands, pendingProbes: completed.state.pendingProbes }),
     deferredDispatchState: 'ready',
-    lastCompletedActor: managerName,
-    lastDispatchError: null,
-  };
-  await persistDeferredState(workspace, nextState);
+	    lastCompletedActor: managerName,
+	    lastDispatchError: null,
+	  };
+	  if (managerName === 'summary-manager') {
+	    await ensureFinalSummaryArtifacts(workspace, nextState);
+	  }
+	  await persistDeferredState(workspace, nextState);
   await appendEvent(workspace, 'manager.completed', { manager: managerName, requestId: state.requestId, routeId: state.routeId });
   await appendPluginDebug(workspace, 'deferred.manager.completed', { manager: managerName, requestId: state.requestId, remainingManagers: pendingManagers });
   return nextState;
@@ -1534,6 +1693,16 @@ async function handleDeferredActorCompletion(client, workspace, state, hookInput
   if (!authorization.authorized) return state;
   if (isSyntheticAutoDispatchEcho(message)) {
     await appendPluginDebug(workspace, 'hook.chat.message.synthetic_ignored', { agent, sessionID, reason: 'auto-dispatch-echo' });
+    return state;
+  }
+
+  const signalResult = await recordStandardSignalsFromMessage(workspace, state, authorization, sessionID, message);
+  state = signalResult.state;
+  if (signalResult.hasSignals && !signalResult.hasCompletion) {
+    await appendPluginDebug(workspace, 'standard.signals.progress_only_no_completion', {
+      actor: authorization.actor,
+      stepId: authorization.stepId,
+    });
     return state;
   }
 
@@ -1725,7 +1894,7 @@ export const server = async (input) => {
             dispatchNextDeferredHand,
             dispatchNextDeferredProbe,
             finalizeDeferredAcceptance,
-            options: { forceDispatch: true, allowedKinds: ['probe', 'acceptance-closure'] },
+            options: { forceDispatch: true, allowedKinds: ['manager', 'probe', 'acceptance-closure'] },
           });
           return;
         }

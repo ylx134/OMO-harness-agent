@@ -57,7 +57,7 @@ test('recovery reconstructs active dispatch and compat queues from graph runtime
   assert.equal(recovered.activeDispatch?.actor, 'execution-manager');
   assert.equal(recovered.activeDispatch?.stepId, 'manager:execution-manager');
   assert.equal(recovered.activeDispatch?.sessionID, 'child_exec');
-  assert.deepEqual(recovered.pendingManagers, ['execution-manager', 'acceptance-manager']);
+  assert.deepEqual(recovered.pendingManagers, ['execution-manager', 'acceptance-manager', 'summary-manager']);
   assert.equal(recovered.compat.activeDispatch?.actor, 'execution-manager');
   assert.deepEqual(recovered.activeStepIds, ['manager:execution-manager']);
 });

@@ -85,7 +85,7 @@ test('E2E F-M1: full lifecycle from /control to route completion', async () => {
   assert.equal(state.routeId, 'F-M1');
   assert.equal(state.currentPhase, 'planning');
   assert.equal(state.activeDispatch?.actor, 'planning-manager');
-  assert.deepEqual(state.pendingManagers, ['planning-manager', 'execution-manager', 'acceptance-manager']);
+  assert.deepEqual(state.pendingManagers, ['planning-manager', 'execution-manager', 'acceptance-manager', 'summary-manager']);
   assert.deepEqual(dispatched.map(d => d.actor).filter(Boolean), ['planning-manager']);
 
   // ── Phase 1: planning-manager completes → execution-manager dispatched ──
@@ -147,12 +147,18 @@ test('E2E F-M1: full lifecycle from /control to route completion', async () => {
   state = await readState(workspace);
   assert.deepEqual(state.pendingProbes, []);
 
-  // ── Phase 7: acceptance closure dispatched and completed ──────
-  assert.equal(state.activeDispatch?.actor, 'acceptance-manager');
-  assert.equal(state.activeDispatch?.phase, 'acceptance-closure');
-  await completeStep(workspace, hooks);
+	  // ── Phase 7: summary-manager dispatched and completed ─────────
+	  assert.equal(state.activeDispatch?.actor, 'summary-manager');
+	  assert.equal(state.activeDispatch?.phase, 'manager');
+	  await completeStep(workspace, hooks);
+	  state = await readState(workspace);
 
-  // ── Phase 8: verify COMPLETE state ────────────────────────────
+	  // ── Phase 8: acceptance closure dispatched and completed ──────
+	  assert.equal(state.activeDispatch?.actor, 'acceptance-manager');
+	  assert.equal(state.activeDispatch?.phase, 'acceptance-closure');
+	  await completeStep(workspace, hooks);
+
+	  // ── Phase 9: verify COMPLETE state ────────────────────────────
   state = await readState(workspace);
   assert.equal(state.currentPhase, 'complete');
   assert.equal(state.deferredDispatchState, 'complete');
@@ -165,9 +171,10 @@ test('E2E F-M1: full lifecycle from /control to route completion', async () => {
 
   // Full dispatch sequence should include all required actors
   const dispatchedActors = dispatched.map(d => d.actor).filter(Boolean);
-  assert.ok(dispatchedActors.includes('planning-manager'));
-  assert.ok(dispatchedActors.includes('execution-manager'));
-  assert.ok(dispatchedActors.includes('acceptance-manager'));
+	  assert.ok(dispatchedActors.includes('planning-manager'));
+	  assert.ok(dispatchedActors.includes('execution-manager'));
+	  assert.ok(dispatchedActors.includes('acceptance-manager'));
+	  assert.ok(dispatchedActors.includes('summary-manager'));
   // At least one capability hand
   assert.ok(dispatchedActors.some(a => ['shell-agent', 'code-agent', 'evidence-agent'].includes(a)));
   // At least one probe
@@ -221,15 +228,21 @@ test('E2E F-M1: graceful stop when deliverables are missing at closure time', as
     await completeStep(workspace, hooks);
   }
 
-  // Complete probes
-  while (true) {
-    state = await readState(workspace);
-    const activeProbes = state.activeStepIds
-      .map(sid => state.graph?.steps?.[sid])
-      .filter(s => s?.kind === 'probe');
-    if (activeProbes.length === 0) break;
-    await completeStep(workspace, hooks);
-  }
+	  // Complete probes
+	  while (true) {
+	    state = await readState(workspace);
+	    const activeProbes = state.activeStepIds
+	      .map(sid => state.graph?.steps?.[sid])
+	      .filter(s => s?.kind === 'probe');
+	    if (activeProbes.length === 0) break;
+	    await completeStep(workspace, hooks);
+	  }
+
+	  // Complete summary manager before final closure gate is evaluated
+	  state = await readState(workspace);
+	  if (state.activeDispatch?.actor === 'summary-manager') {
+	    await completeStep(workspace, hooks);
+	  }
 
   // Now at acceptance closure — but deliverables are missing
   state = await readState(workspace);

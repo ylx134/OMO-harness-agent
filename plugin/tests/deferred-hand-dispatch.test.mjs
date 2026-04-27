@@ -56,7 +56,7 @@ test('single /control keeps execution-manager ahead of capability hands until ex
 
   let after = await readState(workspace);
   assert.deepEqual(dispatched.map((entry) => entry.actor), ['planning-manager', 'execution-manager']);
-  assert.deepEqual(after.pendingManagers, ['execution-manager', 'acceptance-manager']);
+  assert.deepEqual(after.pendingManagers, ['execution-manager', 'acceptance-manager', 'summary-manager']);
   assert.deepEqual(after.pendingCapabilityHands, ['shell-agent', 'code-agent', 'evidence-agent']);
   assert.equal(after.activeDispatch?.actor, 'execution-manager');
 
@@ -64,7 +64,7 @@ test('single /control keeps execution-manager ahead of capability hands until ex
 
   after = await readState(workspace);
   assert.deepEqual(dispatched.map((entry) => entry.actor), ['planning-manager', 'execution-manager', 'shell-agent', 'evidence-agent']);
-  assert.deepEqual(after.pendingManagers, ['acceptance-manager']);
+  assert.deepEqual(after.pendingManagers, ['acceptance-manager', 'summary-manager']);
   assert.deepEqual(after.pendingCapabilityHands, ['shell-agent', 'code-agent', 'evidence-agent']);
   assert.equal(after.lastCompletedActor, 'execution-manager');
   assert.deepEqual(new Set(after.activeStepIds), new Set(['capability-hand:shell-agent', 'capability-hand:evidence-agent']));

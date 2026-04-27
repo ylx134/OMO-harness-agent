@@ -61,6 +61,7 @@ HARNESS_AGENT_FILES=(
   "planning-manager.md"
   "execution-manager.md"
   "acceptance-manager.md"
+  "summary-manager.md"
 )
 
 echo -e "${GREEN}🚀 Installing OMO Harness Skills managed-agents integration...${NC}"

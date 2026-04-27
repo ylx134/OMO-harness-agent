@@ -14,6 +14,7 @@ function childDispatchDefaults(existing = {}) {
     planning: existing.planning || [],
     execution: existing.execution || [],
     acceptance: existing.acceptance || [],
+    summary: existing.summary || [],
     capabilityHands: existing.capabilityHands || {},
     probes: existing.probes || {},
     acceptanceClosure: existing.acceptanceClosure || [],

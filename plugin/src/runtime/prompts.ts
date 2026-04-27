@@ -1,5 +1,14 @@
 import type { HarnessDispatchStateLike } from '../types.js';
 
+function standardSignalInstructions() {
+  return [
+    'Standard signal format:',
+    '- Progress without completion: HARNESS_PROGRESS {"status":"working","summary":"short status","nextActions":["next step"]}',
+    '- Handoff before completion: HARNESS_HANDOFF {"to":"summary-manager","summary":"what changed","artifacts":[".agent-memory/evidence-ledger.md"],"blockers":[],"nextActions":[]}',
+    '- Completion: HARNESS_COMPLETE {"status":"done","summary":"completed bounded assignment"}',
+  ];
+}
+
 function managerActionLines(managerName: string) {
   if (managerName === 'feature-planner') {
     return [
@@ -31,6 +40,14 @@ function managerActionLines(managerName: string) {
     ];
   }
 
+  if (managerName === 'summary-manager') {
+    return [
+      '- consume progress-signal and handoff-signal events from .agent-memory/progress-events.jsonl and .agent-memory/handoff-events.jsonl',
+      '- combine manager, capability hand, probe, and acceptance artifacts into .agent-memory/final-summary.md',
+      '- write .agent-memory/handoff-summary.md with clear next actions, blockers, and artifacts',
+    ];
+  }
+
   return [
     '- perform independent acceptance management',
     '- dispatch the selected probes',
@@ -53,6 +70,9 @@ export function buildManagerDispatchPrompt(managerName: string, state: HarnessDi
     'Your required action:',
     ...managerActionLines(managerName),
     '- preserve harness role boundaries',
+    '- emit HARNESS_PROGRESS lines for meaningful progress',
+    '- emit HARNESS_HANDOFF and HARNESS_COMPLETE before your final response',
+    ...standardSignalInstructions(),
     managerName === 'execution-manager' ? '- do not perform acceptance.' : '- do not collapse the route into one-thread execution.',
   ].join('\n');
 }
@@ -70,6 +90,9 @@ export function buildCapabilityHandDispatchPrompt(capabilityName: string, state:
     '- do not become a manager or acceptance judge',
     '- write or support evidence relevant to your capability',
     '- preserve harness role boundaries',
+    '- emit HARNESS_PROGRESS while working when you need to report progress without completing',
+    '- emit HARNESS_HANDOFF and HARNESS_COMPLETE before your final response',
+    ...standardSignalInstructions(),
   ].join('\n');
 }
 
@@ -86,6 +109,9 @@ export function buildProbeDispatchPrompt(probeName: string, state: HarnessDispat
     '- collect evidence relevant to your probe',
     '- do not issue final acceptance',
     '- preserve harness role boundaries',
+    '- emit HARNESS_PROGRESS while working when you need to report progress without completing',
+    '- emit HARNESS_HANDOFF and HARNESS_COMPLETE before your final response',
+    ...standardSignalInstructions(),
   ].join('\n');
 }
 
@@ -99,9 +125,12 @@ export function buildAcceptanceClosurePrompt(state: HarnessDispatchStateLike) {
     `Dispatched capability hands: ${(state.dispatchedCapabilityHands || []).join(', ') || 'none'}`,
     `Dispatched probes: ${(state.dispatchedProbes || []).join(', ') || 'none'}`,
     'Your required action:',
+    '- consume .agent-memory/final-summary.md and .agent-memory/handoff-summary.md before closure',
     '- consume probe results and acceptance evidence',
     '- issue final acceptance closure',
     '- update acceptance artifacts if needed',
     '- do not reopen implementation unless a real blocker is found',
+    '- emit HARNESS_COMPLETE before your final response',
+    ...standardSignalInstructions(),
   ].join('\n');
 }

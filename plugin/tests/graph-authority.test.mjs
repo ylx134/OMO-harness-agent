@@ -30,7 +30,7 @@ test('ensureGraphState prefers graph-derived pending managers over stale legacy 
         lastError: null,
       },
     },
-    pendingManagers: ['planning-manager', 'execution-manager', 'acceptance-manager'],
+    pendingManagers: ['planning-manager', 'execution-manager', 'acceptance-manager', 'summary-manager'],
     pendingCapabilityHands: route.capability,
     pendingProbes: route.probes,
     currentPhase: 'execution',
@@ -47,6 +47,6 @@ test('ensureGraphState prefers graph-derived pending managers over stale legacy 
     },
   });
 
-  assert.deepEqual(state.pendingManagers, ['execution-manager', 'acceptance-manager']);
+  assert.deepEqual(state.pendingManagers, ['execution-manager', 'acceptance-manager', 'summary-manager']);
   assert.equal(state.nextExpectedActor, 'execution-manager');
 });

@@ -30,8 +30,8 @@ test('legacy live state upgrades through storage and reconciles with serial comp
     flowTier: '中流程',
     currentPhase: 'execution',
     nextExpectedActor: 'execution-manager',
-    requiredManagers: ['planning-manager', 'execution-manager', 'acceptance-manager'],
-    pendingManagers: ['execution-manager', 'acceptance-manager'],
+    requiredManagers: ['planning-manager', 'execution-manager', 'acceptance-manager', 'summary-manager'],
+    pendingManagers: ['execution-manager', 'acceptance-manager', 'summary-manager'],
     dispatchedManagers: ['planning-manager', 'execution-manager'],
     requiredCapabilityHands: ['shell-agent', 'code-agent', 'evidence-agent'],
     selectedCapabilityHands: ['shell-agent', 'code-agent', 'evidence-agent'],
@@ -102,7 +102,7 @@ test('legacy live state upgrades through storage and reconciles with serial comp
   assert.equal(upgraded.graphRuntimeRollout?.mode, 'serial-compat');
   assert.deepEqual(upgraded.graphRuntimeRollout?.budgets, { managers: 1, hands: 1, probes: 1 });
   assert.deepEqual(dispatched.map((entry) => entry.actor), ['shell-agent']);
-  assert.deepEqual(upgraded.pendingManagers, ['acceptance-manager']);
+	  assert.deepEqual(upgraded.pendingManagers, ['acceptance-manager', 'summary-manager']);
   assert.deepEqual(upgraded.activeStepIds, ['capability-hand:shell-agent']);
   assert.equal(upgraded.activeDispatch?.actor, 'shell-agent');
 

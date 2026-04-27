@@ -69,7 +69,7 @@ test('clear /control auto-starts by dispatching only the first legal actor and t
   assert.equal(createdSessions.length, 1);
   assert.equal(state.currentPhase, 'planning');
   assert.equal(state.nextExpectedActor, 'planning-manager');
-  assert.deepEqual(state.pendingManagers, ['planning-manager', 'execution-manager', 'acceptance-manager']);
+  assert.deepEqual(state.pendingManagers, ['planning-manager', 'execution-manager', 'acceptance-manager', 'summary-manager']);
   assert.deepEqual(state.pendingCapabilityHands, ['shell-agent', 'code-agent', 'evidence-agent']);
   assert.deepEqual(state.pendingProbes, ['regression-probe-agent', 'artifact-probe-agent']);
   assert.equal(state.deferredDispatchState, 'manager_in_progress');
@@ -115,11 +115,12 @@ test('clear /control advances one child completion at a time until final success
     'evidence-agent',
     'shell-agent',
     'code-agent',
-    'acceptance-manager',
-    'artifact-probe-agent',
-    'regression-probe-agent',
-    'acceptance-manager',
-  ];
+	    'acceptance-manager',
+	    'artifact-probe-agent',
+	    'regression-probe-agent',
+	    'summary-manager',
+	    'acceptance-manager',
+	  ];
 
   for (const agent of completionSequence) {
     state = await readState(workspace);
@@ -134,11 +135,12 @@ test('clear /control advances one child completion at a time until final success
     'shell-agent',
     'evidence-agent',
     'code-agent',
-    'acceptance-manager',
-    'regression-probe-agent',
-    'artifact-probe-agent',
-    'acceptance-manager',
-  ]);
+	    'acceptance-manager',
+	    'regression-probe-agent',
+	    'artifact-probe-agent',
+	    'summary-manager',
+	    'acceptance-manager',
+	  ]);
   assert.equal(state.currentPhase, 'complete');
   assert.equal(state.nextExpectedActor, 'none');
   assert.deepEqual(state.pendingManagers, []);
@@ -172,7 +174,7 @@ test('invalid acceptance-closure completion leaves route state unchanged when gr
     nextExpectedActor: 'acceptance-manager',
     requiredManagers: route.managers,
     pendingManagers: [],
-    dispatchedManagers: ['planning-manager', 'execution-manager', 'acceptance-manager'],
+    dispatchedManagers: ['planning-manager', 'execution-manager', 'acceptance-manager', 'summary-manager'],
     requiredCapabilityHands: route.capability,
     selectedCapabilityHands: route.capability,
     pendingCapabilityHands: [],

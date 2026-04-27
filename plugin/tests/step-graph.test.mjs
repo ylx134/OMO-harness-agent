@@ -24,6 +24,7 @@ test('compileRouteGraph creates a stable step graph with concurrent execution fa
     'manager:acceptance-manager',
     'probe:regression-probe-agent',
     'probe:artifact-probe-agent',
+    'manager:summary-manager',
     'acceptance-closure:acceptance-manager',
   ]);
 
@@ -36,9 +37,11 @@ test('compileRouteGraph creates a stable step graph with concurrent execution fa
   assert.deepEqual(graph.steps['probe:regression-probe-agent'].dependsOnStepIds, ['manager:acceptance-manager']);
   assert.deepEqual(graph.steps['probe:artifact-probe-agent'].dependsOnStepIds, ['manager:acceptance-manager']);
   assert.deepEqual(
-    new Set(graph.steps['acceptance-closure:acceptance-manager'].dependsOnStepIds),
+    new Set(graph.steps['manager:summary-manager'].dependsOnStepIds),
     new Set(['probe:regression-probe-agent', 'probe:artifact-probe-agent']),
   );
+  assert.deepEqual(graph.steps['acceptance-closure:acceptance-manager'].dependsOnStepIds, ['manager:summary-manager']);
+  assert.deepEqual(graph.steps['manager:summary-manager'].producesDeliverables, ['final-summary.md', 'handoff-summary.md']);
   assert.deepEqual(graph.steps['capability-hand:docs-agent'].resourceLocks, ['docs-write']);
   assert.deepEqual(graph.steps['capability-hand:code-agent'].resourceLocks, ['workspace-write']);
   assert.deepEqual(graph.steps['capability-hand:shell-agent'].resourceLocks, ['workspace-write', 'build-runner']);

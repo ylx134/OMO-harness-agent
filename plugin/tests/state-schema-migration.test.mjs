@@ -25,8 +25,8 @@ test('loadPluginState migrates version 1 scalar state into schemaVersion 2 graph
     flowTier: '中流程',
     currentPhase: 'execution',
     nextExpectedActor: 'execution-manager',
-    requiredManagers: ['planning-manager', 'execution-manager', 'acceptance-manager'],
-    pendingManagers: ['execution-manager', 'acceptance-manager'],
+    requiredManagers: ['planning-manager', 'execution-manager', 'acceptance-manager', 'summary-manager'],
+    pendingManagers: ['execution-manager', 'acceptance-manager', 'summary-manager'],
     dispatchedManagers: ['planning-manager'],
     requiredCapabilityHands: ['shell-agent', 'code-agent', 'evidence-agent'],
     selectedCapabilityHands: ['shell-agent', 'code-agent', 'evidence-agent'],
@@ -75,7 +75,7 @@ test('loadPluginState migrates version 1 scalar state into schemaVersion 2 graph
   assert.equal(loaded.state.graph.routeId, 'F-M1');
   assert.ok(loaded.state.graph.steps['manager:planning-manager']);
   assert.ok(loaded.state.graph.steps['manager:execution-manager']);
-  assert.deepEqual(loaded.state.compat.pendingManagers, ['execution-manager', 'acceptance-manager']);
+  assert.deepEqual(loaded.state.compat.pendingManagers, ['execution-manager', 'acceptance-manager', 'summary-manager']);
   assert.equal(loaded.state.activeDispatch.actor, 'execution-manager');
   assert.equal(loaded.state.stepRuntime['manager:execution-manager'].status, 'in_progress');
   assert.equal(loaded.state.stepRuntime['manager:execution-manager'].activeSessionID, 'child_2');
@@ -111,7 +111,7 @@ test('initializeHarnessTask intake persists schemaVersion 2 graph-aware state wi
   assert.equal(persisted.graph.routeId, 'F-M1');
   assert.ok(persisted.graph.steps['manager:planning-manager']);
   assert.ok(persisted.stepRuntime['manager:planning-manager']);
-  assert.deepEqual(persisted.pendingManagers, ['planning-manager', 'execution-manager', 'acceptance-manager']);
+  assert.deepEqual(persisted.pendingManagers, ['planning-manager', 'execution-manager', 'acceptance-manager', 'summary-manager']);
   assert.deepEqual(persisted.compat.pendingManagers, persisted.pendingManagers);
   assert.equal(persisted.compat.deferredDispatchState, persisted.deferredDispatchState);
 

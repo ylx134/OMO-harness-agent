@@ -130,7 +130,7 @@ test('projectLegacyState keeps current operator-facing queues and active dispatc
     rawUserInput: '修复构建报错并补上回归验证',
   });
 
-  assert.deepEqual(projected.pendingManagers, ['execution-manager', 'acceptance-manager']);
+  assert.deepEqual(projected.pendingManagers, ['execution-manager', 'acceptance-manager', 'summary-manager']);
   assert.deepEqual(projected.pendingCapabilityHands, ['shell-agent', 'code-agent', 'evidence-agent']);
   assert.deepEqual(projected.pendingProbes, ['regression-probe-agent', 'artifact-probe-agent']);
   assert.equal(projected.nextExpectedActor, 'execution-manager');

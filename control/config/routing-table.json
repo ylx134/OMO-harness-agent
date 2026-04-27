@@ -9,7 +9,7 @@
       "capability_requirements": [],
       "probe_requirements": ["artifact-probe-agent"],
       "startup_files": ["task.md"],
-      "deliverables": ["answer", "acceptance-report.md"],
+      "deliverables": ["answer", "acceptance-report.md", "final-summary.md", "handoff-summary.md"],
       "anti_shallow_bar": "do not pretend a decision task is complete just because a guess sounds plausible",
       "execution_mode": {
         "multi_agent": true,
@@ -27,7 +27,7 @@
       "capability_requirements": ["shell-agent", "code-agent", "evidence-agent"],
       "probe_requirements": ["regression-probe-agent", "artifact-probe-agent"],
       "startup_files": ["task.md", "working-memory.md", "round-contract.md", "orchestration-status.md"],
-      "deliverables": ["round-contract.md", "execution-status.md", "evidence-ledger.md", "acceptance-report.md"],
+      "deliverables": ["round-contract.md", "execution-status.md", "evidence-ledger.md", "acceptance-report.md", "final-summary.md", "handoff-summary.md"],
       "anti_shallow_bar": "main failure path and one nearby regression check are both required",
       "execution_mode": {
         "multi_agent": true,
@@ -50,7 +50,7 @@
       "capability_requirements": ["docs-agent", "code-agent", "shell-agent", "evidence-agent"],
       "probe_requirements": ["regression-probe-agent", "artifact-probe-agent"],
       "startup_files": ["task.md", "capability-map.md", "gap-analysis.md", "working-memory.md", "round-contract.md", "orchestration-status.md"],
-      "deliverables": ["task.md", "round-contract.md", "execution-status.md", "evidence-ledger.md", "acceptance-report.md"],
+      "deliverables": ["task.md", "round-contract.md", "execution-status.md", "evidence-ledger.md", "acceptance-report.md", "final-summary.md", "handoff-summary.md"],
       "anti_shallow_bar": "do not count visible output alone as progress; the named gap must shrink",
       "execution_mode": {
         "multi_agent": true,
@@ -73,7 +73,7 @@
       "capability_requirements": ["docs-agent", "shell-agent", "code-agent", "evidence-agent"],
       "probe_requirements": ["api-probe-agent", "regression-probe-agent", "artifact-probe-agent"],
       "startup_files": ["task.md", "baseline-source.md", "capability-map.md", "gap-analysis.md", "quality-guardrails.md", "working-memory.md", "round-contract.md", "orchestration-status.md"],
-      "deliverables": ["baseline-source.md", "capability-map.md", "gap-analysis.md", "task.md", "round-contract.md", "execution-status.md", "evidence-ledger.md", "acceptance-report.md"],
+      "deliverables": ["baseline-source.md", "capability-map.md", "gap-analysis.md", "task.md", "round-contract.md", "execution-status.md", "evidence-ledger.md", "acceptance-report.md", "final-summary.md", "handoff-summary.md"],
       "anti_shallow_bar": "do not accept a shell that only looks complete; hidden rule or deeper ability must be proved",
       "execution_mode": {
         "multi_agent": true,
@@ -96,7 +96,7 @@
       "capability_requirements": ["docs-agent", "browser-agent", "code-agent", "shell-agent", "evidence-agent"],
       "probe_requirements": ["ui-probe-agent", "regression-probe-agent", "artifact-probe-agent"],
       "startup_files": ["task.md", "product-spec.md", "features.json", "features-summary.md", "baseline-source.md", "gap-analysis.md", "working-memory.md", "round-contract.md", "orchestration-status.md"],
-      "deliverables": ["product-spec.md", "features.json", "features-summary.md", "task.md", "round-contract.md", "execution-status.md", "evidence-ledger.md", "acceptance-report.md"],
+      "deliverables": ["product-spec.md", "features.json", "features-summary.md", "task.md", "round-contract.md", "execution-status.md", "evidence-ledger.md", "acceptance-report.md", "final-summary.md", "handoff-summary.md"],
       "anti_shallow_bar": "do not accept minimum-only slices when the product promise or release bar says fuller depth is required",
       "execution_mode": {
         "multi_agent": true,

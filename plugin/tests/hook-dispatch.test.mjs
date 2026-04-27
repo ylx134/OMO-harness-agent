@@ -45,12 +45,13 @@ async function runRoute(commandText) {
 
 test('F-M1 command hook performs intake/state initialization without promptAsync dispatch', async () => {
   const result = await runRoute('修复构建报错并补上回归验证');
-  assert.equal(result.state.routeId, 'F-M1');
-  assert.deepEqual(result.state.requiredManagers, [
-    'planning-manager',
-    'execution-manager',
-    'acceptance-manager',
-  ]);
+	  assert.equal(result.state.routeId, 'F-M1');
+	  assert.deepEqual(result.state.requiredManagers, [
+	    'planning-manager',
+	    'execution-manager',
+	    'acceptance-manager',
+	    'summary-manager',
+	  ]);
   assert.deepEqual(result.state.selectedCapabilityHands, [
     'shell-agent',
     'code-agent',
@@ -63,7 +64,7 @@ test('F-M1 command hook performs intake/state initialization without promptAsync
   assert.deepEqual(result.dispatched, []);
   assert.equal(result.state.currentPhase, 'intake');
   assert.equal(result.state.nextExpectedActor, 'planning-manager');
-  assert.deepEqual(result.state.pendingManagers, ['planning-manager', 'execution-manager', 'acceptance-manager']);
+  assert.deepEqual(result.state.pendingManagers, ['planning-manager', 'execution-manager', 'acceptance-manager', 'summary-manager']);
   assert.deepEqual(result.state.pendingCapabilityHands, ['shell-agent', 'code-agent', 'evidence-agent']);
   assert.deepEqual(result.state.pendingProbes, ['regression-probe-agent', 'artifact-probe-agent']);
   assert.equal(result.state.deferredDispatchState, 'ready');
@@ -87,7 +88,7 @@ test('F-M1 command hook performs intake/state initialization without promptAsync
   assert.match(result.status, /Held Locks: none/);
   assert.match(result.status, /Signal Summary: 0 emitted, 0 pending/);
   assert.match(result.status, /Legacy Compatibility View/);
-  assert.match(result.status, /Legacy Pending Managers: planning-manager, execution-manager, acceptance-manager/);
+	  assert.match(result.status, /Legacy Pending Managers: planning-manager, execution-manager, acceptance-manager, summary-manager/);
   assert.match(result.status, /Legacy Deferred Dispatch State: ready/);
   assert.match(result.debug, /hook\.command\.before/);
   assert.match(result.debug, /state\.initialized\.from_command/);
@@ -96,11 +97,13 @@ test('F-M1 command hook performs intake/state initialization without promptAsync
   assert.equal(result.routePacket.routeId, 'F-M1');
   assert.deepEqual(result.routePacket.requiredDeliverables, [
     'round-contract.md',
-    'execution-status.md',
-    'evidence-ledger.md',
-    'acceptance-report.md',
-  ]);
-  assert.deepEqual(result.routePacket.pendingManagers, ['planning-manager', 'execution-manager', 'acceptance-manager']);
+	    'execution-status.md',
+	    'evidence-ledger.md',
+	    'acceptance-report.md',
+	    'final-summary.md',
+	    'handoff-summary.md',
+	  ]);
+  assert.deepEqual(result.routePacket.pendingManagers, ['planning-manager', 'execution-manager', 'acceptance-manager', 'summary-manager']);
   assert.deepEqual(result.routePacket.pendingCapabilityHands, ['shell-agent', 'code-agent', 'evidence-agent']);
   assert.deepEqual(result.routePacket.pendingProbes, ['regression-probe-agent', 'artifact-probe-agent']);
   assert.equal(result.routePacket.deferredDispatchState, 'ready');
@@ -111,19 +114,21 @@ test('F-M1 command hook performs intake/state initialization without promptAsync
 test('A-M1 intake preserves capability-planner as next expected actor without dispatching', async () => {
   const result = await runRoute('把系统真正改造成具备更深层的隐藏能力，并证明 API 行为可靠');
   assert.equal(result.state.routeId, 'A-M1');
-  assert.deepEqual(result.state.requiredManagers, [
-    'capability-planner',
-    'planning-manager',
-    'execution-manager',
-    'acceptance-manager',
-  ]);
+	  assert.deepEqual(result.state.requiredManagers, [
+	    'capability-planner',
+	    'planning-manager',
+	    'execution-manager',
+	    'acceptance-manager',
+	    'summary-manager',
+	  ]);
   assert.equal(result.state.nextExpectedActor, 'capability-planner');
-  assert.deepEqual(result.state.pendingManagers, [
-    'capability-planner',
-    'planning-manager',
-    'execution-manager',
-    'acceptance-manager',
-  ]);
+	  assert.deepEqual(result.state.pendingManagers, [
+	    'capability-planner',
+	    'planning-manager',
+	    'execution-manager',
+	    'acceptance-manager',
+	    'summary-manager',
+	  ]);
   assert.deepEqual(result.dispatched, []);
   assert.deepEqual(result.state.selectedProbes, [
     'api-probe-agent',
@@ -137,19 +142,21 @@ test('A-M1 intake preserves capability-planner as next expected actor without di
 test('P-H1 intake preserves feature-planner and selected UI/browser actors without dispatching', async () => {
   const result = await runRoute('为现有系统搭建一个完整产品级功能，覆盖关键用户旅程与发布质量');
   assert.equal(result.state.routeId, 'P-H1');
-  assert.deepEqual(result.state.requiredManagers, [
-    'feature-planner',
-    'planning-manager',
-    'execution-manager',
-    'acceptance-manager',
-  ]);
+	  assert.deepEqual(result.state.requiredManagers, [
+	    'feature-planner',
+	    'planning-manager',
+	    'execution-manager',
+	    'acceptance-manager',
+	    'summary-manager',
+	  ]);
   assert.equal(result.state.nextExpectedActor, 'feature-planner');
-  assert.deepEqual(result.state.pendingManagers, [
-    'feature-planner',
-    'planning-manager',
-    'execution-manager',
-    'acceptance-manager',
-  ]);
+	  assert.deepEqual(result.state.pendingManagers, [
+	    'feature-planner',
+	    'planning-manager',
+	    'execution-manager',
+	    'acceptance-manager',
+	    'summary-manager',
+	  ]);
   assert.deepEqual(result.dispatched, []);
   assert.ok(result.state.selectedCapabilityHands.includes('browser-agent'));
   assert.ok(result.state.selectedProbes.includes('ui-probe-agent'));

@@ -59,6 +59,11 @@ export function selectNextDispatchPlan(state, options = {}) {
     if (activeProbes.length > 0) return { dispatches: [], reason: 'active_dispatch_in_progress' };
   }
 
+  if (budgets.managers > 0 && allowedKinds.has('manager') && nextManager === 'summary-manager') {
+    if (activeSteps.length > 0) return { dispatches: [], reason: 'active_dispatch_in_progress' };
+    return { dispatches: [{ kind: 'manager', actor: nextManager, reason: 'pending_summary_manager' }], reason: 'pending_summary_manager' };
+  }
+
   const acceptanceClosureReady = firstReadyActor(state, ['acceptance-manager'], 'acceptance-closure');
   if (allowedKinds.has('acceptance-closure') && state.dispatchedManagers?.includes('acceptance-manager') && acceptanceClosureReady) {
     if (activeSteps.length > 0) return { dispatches: [], reason: 'active_dispatch_in_progress' };

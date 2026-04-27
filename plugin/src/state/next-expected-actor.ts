@@ -32,6 +32,7 @@ type NextExpectedActorState = GraphStateLike & {
   nextExpectedActor?: string;
   activeDispatch?: { actor?: string | null } | null;
   stepRuntime?: Record<string, StepRuntime>;
+  lastDispatchError?: { actor?: string | null } | null;
   compat?: { nextExpectedActor?: string } | null;
 };
 
@@ -41,6 +42,9 @@ export function deriveNextExpectedActor(state: NextExpectedActorState = {}) {
   if (state?.nextExpectedActor) return state.nextExpectedActor;
   if (state?.compat?.nextExpectedActor) return state.compat.nextExpectedActor;
   if (state?.blocked) return 'none';
+  if (state?.deferredDispatchState === 'retryable_error' && state?.lastDispatchError?.actor) {
+    return state.lastDispatchError.actor;
+  }
 
   const activeActor = activeStepActor(state);
   if (activeActor) return activeActor;

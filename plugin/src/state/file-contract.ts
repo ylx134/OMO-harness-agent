@@ -26,6 +26,8 @@ const executionFileNames = new Set([
   'baseline-source.md',
   'capability-map.md',
   'gap-analysis.md',
+  'final-summary.md',
+  'handoff-summary.md',
 ]);
 
 const placeholderContent = {
@@ -36,6 +38,8 @@ const placeholderContent = {
   'execution-status.md': '# Execution Status\n\n',
   'acceptance-report.md': '# Acceptance Report\n\n',
   'evidence-ledger.md': '# Evidence Ledger\n\n',
+  'final-summary.md': '# Final Summary\n\n',
+  'handoff-summary.md': '# Handoff Summary\n\n',
 };
 
 const scaffoldMarkdownHeadings = {

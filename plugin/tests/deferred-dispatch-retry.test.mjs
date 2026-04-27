@@ -64,7 +64,7 @@ test('failed deferred manager dispatch keeps queue stable and records retryable 
   const after = await readState(workspace);
   assert.deepEqual(dispatched, ['planning-manager']);
   assert.deepEqual(after.dispatchedManagers, []);
-  assert.deepEqual(after.pendingManagers, ['planning-manager', 'execution-manager', 'acceptance-manager']);
+  assert.deepEqual(after.pendingManagers, ['planning-manager', 'execution-manager', 'acceptance-manager', 'summary-manager']);
   assert.equal(after.currentPhase, 'intake');
   assert.equal(after.nextExpectedActor, 'planning-manager');
   assert.equal(after.deferredDispatchState, 'retryable_error');
@@ -96,7 +96,7 @@ test('retry after deferred manager dispatch failure can succeed without corrupti
   const after = await readState(workspace);
   assert.deepEqual(dispatched, ['planning-manager', 'planning-manager']);
   assert.deepEqual(after.dispatchedManagers, ['planning-manager']);
-  assert.deepEqual(after.pendingManagers, ['planning-manager', 'execution-manager', 'acceptance-manager']);
+  assert.deepEqual(after.pendingManagers, ['planning-manager', 'execution-manager', 'acceptance-manager', 'summary-manager']);
   assert.equal(after.currentPhase, 'planning');
   assert.equal(after.nextExpectedActor, 'planning-manager');
   assert.equal(after.deferredDispatchState, 'manager_in_progress');

@@ -28,10 +28,12 @@ test('shared route file contract derives planning, execution, acceptance, and pl
     'features.json',
     'features-summary.md',
     'task.md',
-    'round-contract.md',
-    'execution-status.md',
-    'evidence-ledger.md',
-  ]);
+	    'round-contract.md',
+	    'execution-status.md',
+	    'evidence-ledger.md',
+	    'final-summary.md',
+	    'handoff-summary.md',
+	  ]);
   assert.ok(contract.requiredAcceptanceGates.includes('acceptance-report.md'));
   assert.ok(contract.requiredAcceptanceGates.includes('ui-probe-agent'));
   assert.equal(isPlaceholderDeliverable('features.json', '{}'), true);

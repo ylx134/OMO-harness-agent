@@ -14,6 +14,7 @@ type CompileRouteGraphOptions = {
 function phaseForManager(actor: string) {
   if (actor === 'execution-manager') return 'execution';
   if (actor === 'acceptance-manager') return 'acceptance';
+  if (actor === 'summary-manager') return 'summary';
   return 'planning';
 }
 
@@ -51,7 +52,7 @@ export function compileRouteGraph({
   const managerActors = [...(managers || route?.managers || [])];
   const handActors = [...(selectedCapabilityHands || route?.capability || [])];
   const probeActors = [...(selectedProbes || route?.probes || [])];
-  const preAcceptanceManagers = managerActors.filter((actor) => actor !== 'acceptance-manager');
+  const preAcceptanceManagers = managerActors.filter((actor) => actor !== 'acceptance-manager' && actor !== 'summary-manager');
   const acceptanceManagers = managerActors.filter((actor) => actor === 'acceptance-manager');
 
   const steps: Record<string, GraphStep> = {};
@@ -84,13 +85,24 @@ export function compileRouteGraph({
     probeStepIds.push(id);
   }
 
+  const summaryDependencyStepIds = probeStepIds.length > 0 ? probeStepIds : probeDependencyStepIds;
+  const summaryId = 'manager:summary-manager';
+  steps[summaryId] = createStep(
+    summaryId,
+    'summary-manager',
+    'manager',
+    'summary',
+    summaryDependencyStepIds,
+  );
+  steps[summaryId].producesDeliverables = ['final-summary.md', 'handoff-summary.md'];
+
   const closureId = 'acceptance-closure:acceptance-manager';
   steps[closureId] = createStep(
     closureId,
     'acceptance-manager',
     'acceptance-closure',
     'acceptance',
-    probeStepIds.length > 0 ? probeStepIds : probeDependencyStepIds,
+    [summaryId],
   );
 
   return {

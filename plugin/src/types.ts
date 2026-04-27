@@ -45,6 +45,9 @@ export interface GraphStateLike {
   pendingCapabilityHands?: string[];
   pendingProbes?: string[];
   activeDispatch?: { actor?: string | null } | null;
+  signals?: Record<string, unknown>;
+  progressSignals?: StandardSignalEvent[];
+  handoffSignals?: StandardSignalEvent[];
 }
 
 export interface RouteConfigShape {
@@ -77,4 +80,24 @@ export interface HarnessDispatchStateLike {
   requiredProbes?: string[];
   dispatchedCapabilityHands?: string[];
   dispatchedProbes?: string[];
+}
+
+export interface StandardSignalEvent {
+  schemaVersion: 1;
+  kind: 'progress-signal' | 'handoff-signal' | 'completion-signal';
+  requestId?: string;
+  routeId?: string;
+  actor?: string;
+  stepId?: string;
+  phase?: string;
+  sessionID?: string;
+  at: string;
+  status?: string;
+  summary: string;
+  detail?: string;
+  to?: string;
+  artifacts?: string[];
+  blockers?: string[];
+  nextActions?: string[];
+  raw?: unknown;
 }

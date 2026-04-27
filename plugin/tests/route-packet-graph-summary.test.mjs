@@ -19,7 +19,7 @@ test('buildRoutePacketProjection adds graph summary fields while preserving lega
     completedDeliverables: ['product-spec.md', 'features.json'],
     blocked: true,
     blockedReason: 'Awaiting QA contract',
-    pendingManagers: ['acceptance-manager'],
+	    pendingManagers: ['acceptance-manager', 'summary-manager'],
     pendingCapabilityHands: ['browser-agent'],
     pendingProbes: ['ui-probe-agent', 'regression-probe-agent', 'artifact-probe-agent'],
     deferredDispatchState: 'probe_in_progress',
@@ -93,7 +93,7 @@ test('buildRoutePacketProjection adds graph summary fields while preserving lega
         stepId: 'probe:ui-probe-agent',
         startedAt: '2026-04-21T00:16:00.000Z',
       },
-      pendingManagers: ['acceptance-manager'],
+	      pendingManagers: ['acceptance-manager', 'summary-manager'],
       pendingCapabilityHands: ['browser-agent'],
       pendingProbes: ['ui-probe-agent', 'regression-probe-agent', 'artifact-probe-agent'],
       nextExpectedActor: 'ui-probe-agent',
@@ -112,7 +112,7 @@ test('buildRoutePacketProjection adds graph summary fields while preserving lega
 
   const routePacket = plugin.buildRoutePacketProjection('P-H1', route, state);
 
-  assert.deepEqual(routePacket.pendingManagers, []);
+	  assert.deepEqual(routePacket.pendingManagers, ['summary-manager']);
   assert.deepEqual(routePacket.pendingCapabilityHands, []);
   assert.deepEqual(routePacket.pendingProbes, ['ui-probe-agent', 'regression-probe-agent', 'artifact-probe-agent']);
   assert.equal(routePacket.deferredDispatchState, 'probe_in_progress');
@@ -136,7 +136,7 @@ test('buildRoutePacketProjection adds graph summary fields while preserving lega
       stepId: 'probe:ui-probe-agent',
       startedAt: '2026-04-21T00:16:00.000Z',
     },
-    pendingManagers: [],
+	    pendingManagers: ['summary-manager'],
     pendingCapabilityHands: [],
     pendingProbes: ['ui-probe-agent', 'regression-probe-agent', 'artifact-probe-agent'],
     nextExpectedActor: 'ui-probe-agent',

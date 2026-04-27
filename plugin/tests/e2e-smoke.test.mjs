@@ -97,7 +97,7 @@ test('/control F-M1 writes correct route state', async () => {
   assert.equal(state.semanticLockStatus, 'locked');
   assert.equal(state.blocked, false);
   assert.ok(state.requestId.startsWith('REQ-'));
-  assert.deepEqual(state.pendingManagers, ['planning-manager', 'execution-manager', 'acceptance-manager']);
+  assert.deepEqual(state.pendingManagers, ['planning-manager', 'execution-manager', 'acceptance-manager', 'summary-manager']);
 
   // Hands/probes selected at init but not yet dispatched
   assert.ok(state.selectedCapabilityHands.length > 0);
@@ -120,7 +120,7 @@ test('/control P-H1 writes correct route state', async () => {
   assert.equal(state.routeId, 'P-H1');
   assert.equal(state.taskType, '产品型');
   assert.equal(state.flowTier, '重流程');
-  assert.deepEqual(state.pendingManagers, ['feature-planner', 'planning-manager', 'execution-manager', 'acceptance-manager']);
+  assert.deepEqual(state.pendingManagers, ['feature-planner', 'planning-manager', 'execution-manager', 'acceptance-manager', 'summary-manager']);
   assert.ok(state.selectedCapabilityHands.includes('browser-agent'));
 
   await rm(workspace, { recursive: true, force: true });

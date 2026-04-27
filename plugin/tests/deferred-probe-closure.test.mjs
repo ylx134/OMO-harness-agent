@@ -85,7 +85,7 @@ test('single /control dispatches acceptance-manager before probes and waits for 
     'code-agent',
     'acceptance-manager',
   ]);
-  assert.deepEqual(after.pendingManagers, ['acceptance-manager']);
+  assert.deepEqual(after.pendingManagers, ['acceptance-manager', 'summary-manager']);
   assert.deepEqual(after.pendingProbes, ['regression-probe-agent', 'artifact-probe-agent']);
   assert.equal(after.currentPhase, 'acceptance');
   assert.equal(after.nextExpectedActor, 'acceptance-manager');
@@ -104,7 +104,7 @@ test('single /control dispatches acceptance-manager before probes and waits for 
     'regression-probe-agent',
     'artifact-probe-agent',
   ]);
-  assert.deepEqual(after.pendingManagers, []);
+  assert.deepEqual(after.pendingManagers, ['summary-manager']);
   assert.deepEqual(after.pendingProbes, ['regression-probe-agent', 'artifact-probe-agent']);
   assert.equal(after.lastCompletedActor, 'acceptance-manager');
   assert.deepEqual(new Set(after.activeStepIds), new Set(['probe:regression-probe-agent', 'probe:artifact-probe-agent']));
@@ -138,12 +138,19 @@ test('single /control waits for all live probes before asking for final closure'
   await completeProbeDispatch(workspace, hooks, 'regression-probe-agent');
   after = await readState(workspace);
   assert.deepEqual(after.pendingProbes, []);
+  assert.equal(after.activeDispatch?.actor, 'summary-manager');
+  assert.equal(after.currentPhase, 'summary');
+  assert.equal(after.deferredDispatchState, 'manager_in_progress');
+
+  await completeActiveDispatch(workspace, hooks);
+  after = await readState(workspace);
   assert.equal(after.activeDispatch?.actor, 'acceptance-manager');
   assert.equal(after.currentPhase, 'acceptance');
   assert.equal(after.deferredDispatchState, 'acceptance_closure_in_progress');
 
   const debug = await readFile(path.join(workspace, '.agent-memory', 'harness-plugin-debug.log'), 'utf8');
   assert.match(debug, /deferred\.probe\.dispatch\.requested/);
+  assert.match(debug, /deferred\.manager\.dispatch\.requested/);
   assert.match(debug, /deferred\.acceptance\.closure\.requested/);
   assert.deepEqual(dispatched.map((entry) => entry.actor), [
     'planning-manager',
@@ -151,11 +158,12 @@ test('single /control waits for all live probes before asking for final closure'
     'shell-agent',
     'evidence-agent',
     'code-agent',
-    'acceptance-manager',
-    'regression-probe-agent',
-    'artifact-probe-agent',
-    'acceptance-manager',
-  ]);
+	    'acceptance-manager',
+	    'regression-probe-agent',
+	    'artifact-probe-agent',
+	    'summary-manager',
+	    'acceptance-manager',
+	  ]);
 
   await rm(workspace, { recursive: true, force: true });
 });
@@ -252,7 +260,7 @@ test('/check dispatches acceptance closure from graph readiness even when compat
     selectedProbes: ['required-probe', 'orphaned-probe'],
     pendingProbes: ['orphaned-probe'],
     dispatchedProbes: ['required-probe'],
-    completedDeliverables: ['round-contract.md', 'execution-status.md', 'evidence-ledger.md', 'acceptance-report.md'],
+	    completedDeliverables: ['round-contract.md', 'execution-status.md', 'evidence-ledger.md', 'acceptance-report.md', 'final-summary.md', 'handoff-summary.md'],
     deferredDispatchState: 'ready',
     lastCompletedActor: 'required-probe',
     lastDispatchError: null,
@@ -316,9 +324,11 @@ test('/check dispatches acceptance closure from graph readiness even when compat
         lastError: null,
       },
     },
-  });
+	  });
 
-  await plugin.savePluginState(workspace, crafted);
+	  await writeFile(path.join(workspace, '.agent-memory', 'final-summary.md'), '# Final Summary\nreal content\n');
+	  await writeFile(path.join(workspace, '.agent-memory', 'handoff-summary.md'), '# Handoff Summary\nreal content\n');
+	  await plugin.savePluginState(workspace, crafted);
 
   await hooks['command.execute.before'](
     { command: 'check', arguments: '', sessionID: 'ses_check' },

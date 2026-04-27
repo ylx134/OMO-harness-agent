@@ -58,6 +58,7 @@ HARNESS_AGENT_FILES=(
   "planning-manager.md"
   "execution-manager.md"
   "acceptance-manager.md"
+  "summary-manager.md"
 )
 
 echo -e "${RED}🗑️  Uninstalling OMO Harness Skills managed-agents integration...${NC}"

@@ -90,6 +90,7 @@ test('single /control stops at retryable acceptance closure when deliverables ar
     'acceptance-manager',
     'regression-probe-agent',
     'artifact-probe-agent',
+    'summary-manager',
   ]);
   assert.equal(after.currentPhase, 'acceptance');
   assert.equal(after.nextExpectedActor, 'acceptance-manager');
@@ -127,6 +128,7 @@ test('single /control marks complete only after acceptance closure itself comple
     'acceptance-manager',
     'regression-probe-agent',
     'artifact-probe-agent',
+    'summary-manager',
     'acceptance-manager',
   ]);
   if (after.currentPhase !== 'complete') {

@@ -79,6 +79,22 @@ const FILE_OWNERSHIP: Record<string, FileRule> = {
   'acceptance-lessons.md': {
     owners: ['acceptance-manager'],
   },
+  'final-summary.md': {
+    owners: ['summary-manager', 'harness-orchestrator'],
+    note: 'summary-manager owns final synthesis; plugin may generate a deterministic fallback summary',
+  },
+  'handoff-summary.md': {
+    owners: ['summary-manager', 'harness-orchestrator'],
+    note: 'summary-manager owns final handoff synthesis; plugin may generate a deterministic fallback summary',
+  },
+  'progress-events.jsonl': {
+    owners: ['harness-orchestrator'],
+    note: 'plugin-managed standard progress signal log',
+  },
+  'handoff-events.jsonl': {
+    owners: ['harness-orchestrator'],
+    note: 'plugin-managed standard handoff signal log',
+  },
 
   // ── Control-owned files ──
   'orchestration-status.md': {
@@ -144,7 +160,7 @@ const PROBE_AGENTS = new Set([
 
 const MANAGER_AGENTS = new Set([
   'harness-orchestrator', 'feature-planner', 'capability-planner',
-  'planning-manager', 'execution-manager', 'acceptance-manager',
+  'planning-manager', 'execution-manager', 'acceptance-manager', 'summary-manager',
 ]);
 
 // ─── Lookup helpers ─────────────────────────────────────────────

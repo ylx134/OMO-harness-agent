@@ -14,10 +14,11 @@ test('compiled acceptance graph fans probes out from acceptance-manager and fans
 
   assert.deepEqual(graph.steps['probe:regression-probe-agent'].dependsOnStepIds, ['manager:acceptance-manager']);
   assert.deepEqual(graph.steps['probe:artifact-probe-agent'].dependsOnStepIds, ['manager:acceptance-manager']);
-  assert.deepEqual(
-    new Set(graph.steps['acceptance-closure:acceptance-manager'].dependsOnStepIds),
-    new Set(['probe:regression-probe-agent', 'probe:artifact-probe-agent']),
-  );
+	  assert.deepEqual(
+	    new Set(graph.steps['manager:summary-manager'].dependsOnStepIds),
+	    new Set(['probe:regression-probe-agent', 'probe:artifact-probe-agent']),
+	  );
+	  assert.deepEqual(graph.steps['acceptance-closure:acceptance-manager'].dependsOnStepIds, ['manager:summary-manager']);
 });
 
 test('acceptance closure completion only requires terminal steps that can still reach closure', () => {

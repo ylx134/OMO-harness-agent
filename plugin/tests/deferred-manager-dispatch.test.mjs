@@ -77,7 +77,7 @@ test('single /control dispatches planning-manager first for F-M1 and waits for i
   assert.equal(after.currentPhase, 'planning');
   assert.equal(after.nextExpectedActor, 'planning-manager');
   assert.equal(after.deferredDispatchState, 'manager_in_progress');
-  assert.deepEqual(after.pendingManagers, ['planning-manager', 'execution-manager', 'acceptance-manager']);
+  assert.deepEqual(after.pendingManagers, ['planning-manager', 'execution-manager', 'acceptance-manager', 'summary-manager']);
 
   await emitMessage(
     hooks,
@@ -88,14 +88,14 @@ test('single /control dispatches planning-manager first for F-M1 and waits for i
 
   after = await readState(workspace);
   assert.deepEqual(dispatched.map((entry) => entry.actor), ['planning-manager']);
-  assert.deepEqual(after.pendingManagers, ['planning-manager', 'execution-manager', 'acceptance-manager']);
+  assert.deepEqual(after.pendingManagers, ['planning-manager', 'execution-manager', 'acceptance-manager', 'summary-manager']);
   assert.equal(after.lastCompletedActor, 'none');
 
   await emitMessage(hooks, 'planning-manager', after.activeDispatch.sessionID, 'planning manager finished the route contract');
 
   after = await readState(workspace);
   assert.deepEqual(dispatched.map((entry) => entry.actor), ['planning-manager', 'execution-manager']);
-  assert.deepEqual(after.pendingManagers, ['execution-manager', 'acceptance-manager']);
+  assert.deepEqual(after.pendingManagers, ['execution-manager', 'acceptance-manager', 'summary-manager']);
   assert.equal(after.lastCompletedActor, 'planning-manager');
   assert.equal(after.activeDispatch?.actor, 'execution-manager');
 
@@ -114,13 +114,13 @@ test('single /control dispatches capability-planner first for A-M1 and waits for
   assert.equal(after.dispatchedManagers[0], 'capability-planner');
   assert.equal(after.currentPhase, 'planning');
   assert.equal(after.nextExpectedActor, 'capability-planner');
-  assert.deepEqual(after.pendingManagers, ['capability-planner', 'planning-manager', 'execution-manager', 'acceptance-manager']);
+  assert.deepEqual(after.pendingManagers, ['capability-planner', 'planning-manager', 'execution-manager', 'acceptance-manager', 'summary-manager']);
 
   await emitMessage(hooks, 'capability-planner', after.activeDispatch.sessionID, 'capability planner completed baseline and gap analysis');
 
   after = await readState(workspace);
   assert.deepEqual(dispatched.map((entry) => entry.actor), ['capability-planner', 'planning-manager']);
-  assert.deepEqual(after.pendingManagers, ['planning-manager', 'execution-manager', 'acceptance-manager']);
+  assert.deepEqual(after.pendingManagers, ['planning-manager', 'execution-manager', 'acceptance-manager', 'summary-manager']);
   assert.equal(after.lastCompletedActor, 'capability-planner');
   assert.equal(after.activeDispatch?.actor, 'planning-manager');
 
@@ -136,7 +136,7 @@ test('planning-manager can advance the route from real tool evidence even if no 
 
   after = await readState(workspace);
   assert.deepEqual(dispatched.map((entry) => entry.actor), ['planning-manager', 'execution-manager']);
-  assert.deepEqual(after.pendingManagers, ['execution-manager', 'acceptance-manager']);
+  assert.deepEqual(after.pendingManagers, ['execution-manager', 'acceptance-manager', 'summary-manager']);
   assert.equal(after.lastCompletedActor, 'planning-manager');
   assert.equal(after.activeDispatch?.actor, 'execution-manager');
 
@@ -151,7 +151,7 @@ test('planning-manager can advance from durable workspace artifacts even if the 
 
   const after = await readState(workspace);
   assert.deepEqual(dispatched.map((entry) => entry.actor), ['planning-manager', 'execution-manager']);
-  assert.deepEqual(after.pendingManagers, ['execution-manager', 'acceptance-manager']);
+  assert.deepEqual(after.pendingManagers, ['execution-manager', 'acceptance-manager', 'summary-manager']);
   assert.equal(after.lastCompletedActor, 'planning-manager');
   assert.equal(after.stepRuntime['manager:planning-manager']?.completionSource, 'workspace-artifact');
   assert.equal(after.activeDispatch?.actor, 'execution-manager');
@@ -188,7 +188,7 @@ test('planning-manager can advance from a completed child session recorded in th
 
     after = await readState(workspace);
     assert.deepEqual(dispatched.map((entry) => entry.actor), ['planning-manager', 'execution-manager']);
-    assert.deepEqual(after.pendingManagers, ['execution-manager', 'acceptance-manager']);
+    assert.deepEqual(after.pendingManagers, ['execution-manager', 'acceptance-manager', 'summary-manager']);
     assert.equal(after.lastCompletedActor, 'planning-manager');
     assert.equal(after.activeDispatch?.actor, 'execution-manager');
 
