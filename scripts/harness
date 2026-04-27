@@ -494,6 +494,64 @@ cmd_summary() {
   echo "[${route_id:-?} ${phase:-?}${blk}] ${features}"
 }
 
+# ─── Subcommand: check (plugin loaded?) ──────────────────────────
+
+cmd_check() {
+  local root
+  root="$(find_workspace_root 2>/dev/null)" || true
+
+  if [[ -z "$root" ]]; then
+    echo -e "${YELLOW}⚠  No .agent-memory/ found in or above current directory${NC}"
+    echo "  The harness plugin has never been initialized in this workspace."
+    echo "  Start with: harness ."
+    echo "  Then use:   /control <your task>"
+    exit 1
+  fi
+
+  local debug_log="$root/.agent-memory/harness-plugin-debug.log"
+
+  if [[ ! -f "$debug_log" ]]; then
+    echo -e "${RED}✗ Plugin NOT loaded${NC}"
+    echo "  No harness-plugin-debug.log found."
+    echo "  The plugin has never been initialized in this session."
+    echo ""
+    echo "  Check:"
+    echo "  1. Did you start with 'harness .' (not 'opencode')?"
+    echo "  2. Run './setup.sh' if you just pulled the repo."
+    exit 1
+  fi
+
+  local last_init
+  last_init=$(grep 'plugin.server.init' "$debug_log" | tail -1 | python3 -c "
+import sys, json
+line = sys.stdin.read().strip()
+if line:
+    parts = line.split('] ', 1)
+    ts = parts[0].lstrip('[') if len(parts) > 1 else '?'
+    try:
+        detail = json.loads(parts[1].replace('plugin.server.init ', ''))
+        dir_name = detail.get('directory','?').split('/')[-1]
+        print(f'{ts}  ({dir_name})')
+    except:
+        print(ts)
+" 2>/dev/null)
+
+  echo -e "${GREEN}✓ Plugin IS loaded${NC}"
+  if [[ -n "$last_init" ]]; then
+    echo -e "  Last init: ${last_init}"
+  fi
+
+  local state_index="$root/.agent-memory/managed-agent-state-index.json"
+  if [[ -f "$state_index" ]]; then
+    local route_id phase
+    route_id="$(json_val "$state_index" 'route.route_id')"
+    phase="$(json_val "$state_index" 'route.current_phase')"
+    if [[ "$route_id" != "N/A" ]] && [[ "$phase" != "N/A" ]]; then
+      echo -e "  Route: ${GREEN}${route_id}${NC}  Phase: ${CYAN}${phase}${NC}"
+    fi
+  fi
+}
+
 # ─── Main ────────────────────────────────────────────────────────
 
 main() {
@@ -506,10 +564,12 @@ main() {
     blockers) cmd_blockers "$@" ;;
     events)   cmd_events "$@" ;;
     summary)  cmd_summary "$@" ;;
+    check)    cmd_check "$@" ;;
     help|--help|-h)
-      echo "Usage: harness <command> [options]"
+      echo "Usage: hctl <command> [options]"
       echo ""
       echo "Commands:"
+      echo "  check               Verify if harness plugin is loaded"
       echo "  status              Show current route, phase, actors, and graph state"
       echo "  trace --round N     Show event timeline (optional: filter by round)"
       echo "  blockers            List all blocked steps, pending dispatch, and guardrails"
@@ -521,7 +581,7 @@ main() {
       ;;
     *)
       echo -e "${RED}Unknown command: $command${NC}"
-      echo "Try 'harness help' for usage."
+      echo "Try 'hctl help' for usage."
       exit 1
       ;;
   esac

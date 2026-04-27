@@ -121,12 +121,10 @@ The runtime enforces structural integrity automatically:
 ## Observability
 
 ```bash
-hctl status              # route, phase, active actors, graph locks, signals
-hctl blockers            # blocked steps, pending dispatch, quality guardrails
-hctl trace               # event timeline from activity.jsonl (color-coded)
-hctl trace --round 3     # filter by round
-hctl events --last 20    # raw event dump
-hctl summary             # one-line for shell prompts
+hctl check         # is the plugin loaded?
+hctl status        # route, phase, active actors
+hctl blockers      # what's blocking
+hctl summary       # one-liner
 ```
 
 When something looks wrong, inspect in this order:

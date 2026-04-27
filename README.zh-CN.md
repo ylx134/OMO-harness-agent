@@ -121,12 +121,10 @@ Agent  = 运行时角色
 ## 可观测性
 
 ```bash
-hctl status              # 路线、phase、活跃 actor、图锁、信号
-hctl blockers            # 阻塞步骤、待调度项、质量护栏
-hctl trace               # activity.jsonl 事件时间线（彩色编码）
-hctl trace --round 3     # 按轮次过滤
-hctl events --last 20    # 原始事件输出
-hctl summary             # 一行 shell 提示符
+hctl check         # 插件是否已加载？
+hctl status        # 路线、阶段、活跃 actor
+hctl blockers      # 阻塞项
+hctl summary       # 一行摘要
 ```
 
 排查问题时按以下顺序检查：
