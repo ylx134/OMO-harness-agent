@@ -15,7 +15,6 @@ CONFIG_FILE="${OPENCODE_CONFIG_FILE:-$HOME/.config/opencode/oh-my-opencode.json}
 OPENCODE_MAIN_CONFIG_FILE="${OPENCODE_MAIN_CONFIG_FILE:-$HOME/.config/opencode/opencode.json}"
 OPENCODE_CONFIG_DIR="$(dirname "$OPENCODE_MAIN_CONFIG_FILE")"
 OMO_AGENT_CONFIG_FILE="${OMO_AGENT_CONFIG_FILE:-$HOME/.config/opencode/oh-my-openagent.json}"
-INSTALL_STATE_FILE="${OPENCODE_CONFIG_DIR}/.omo-harness-install-state.json"
 
 SKILLS=(
   "control"
@@ -43,6 +42,8 @@ HOOKS=(
   "summary-sync-guard.js"
   "probe-evidence-guard.js"
   "managed-route-completeness-guard.js"
+  "schema-guard.js"
+  "summary-supervision-guard.js"
 )
 
 HARNESS_AGENT_FILES=(
@@ -55,8 +56,6 @@ HARNESS_AGENT_FILES=(
 )
 
 echo -e "${RED}🗑️  Uninstalling OMO Harness Skills managed-agents integration...${NC}"
-
-RESTORED_FROM_SNAPSHOT=0
 
 for skill in "${SKILLS[@]}"; do
   target="$SKILLS_DIR/$skill"
@@ -102,30 +101,7 @@ if [ -d "$PLUGIN_DIR" ]; then
   echo -e "  ✅ removed local plugin package: omo-harness-plugin"
 fi
 
-if [ -f "$INSTALL_STATE_FILE" ]; then
-  python3 - "$INSTALL_STATE_FILE" <<'PY'
-import json
-import os
-import sys
-
-snapshot_path = sys.argv[1]
-
-with open(snapshot_path) as f:
-    snapshot = json.load(f)
-
-for file_path, entry in snapshot.get('files', {}).items():
-    if entry.get('exists'):
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
-        with open(file_path, 'w') as f:
-            f.write(entry.get('content') or '')
-    elif os.path.exists(file_path):
-        os.remove(file_path)
-
-os.remove(snapshot_path)
-print('  ✅ restored config files from install snapshot')
-PY
-  RESTORED_FROM_SNAPSHOT=1
-elif [ -f "$CONFIG_FILE" ] && [ -f "$SOURCE_DIR/oh-my-opencode.json" ]; then
+if [ -f "$CONFIG_FILE" ] && [ -f "$SOURCE_DIR/oh-my-opencode.json" ]; then
   python3 - "$CONFIG_FILE" "$SOURCE_DIR/oh-my-opencode.json" <<'PY'
 import json
 import os
@@ -145,10 +121,6 @@ for key in managed.get('categories', {}):
         del config['categories'][key]
         removed.append(f'category:{key}')
 
-if 'model_fallback' in managed and 'model_fallback' in config:
-    del config['model_fallback']
-    removed.append('model_fallback')
-
 for key in managed.get('experimental', {}):
     if key in config.get('experimental', {}):
         del config['experimental'][key]
@@ -158,6 +130,10 @@ for key in managed.get('hooks', {}):
     if key in config.get('hooks', {}):
         del config['hooks'][key]
         removed.append(f'hooks:{key}')
+
+if 'install_dir_hint' in config.get('hooks', {}):
+    del config['hooks']['install_dir_hint']
+    removed.append('hooks:install_dir_hint')
 
 if not config.get('categories'):
     config.pop('categories', None)
@@ -177,7 +153,6 @@ else:
 PY
 fi
 
-if [ "$RESTORED_FROM_SNAPSHOT" -eq 0 ]; then
 python3 - "$OPENCODE_MAIN_CONFIG_FILE" "$PLUGIN_DIR" <<'PY'
 import json
 import os
@@ -196,9 +171,8 @@ with open(config_path, 'w') as f:
     f.write('\n')
 print('  ✅ removed harness plugin registration from opencode.json')
 PY
-fi
 
-if [ "$RESTORED_FROM_SNAPSHOT" -eq 0 ] && [ -f "$OMO_AGENT_CONFIG_FILE" ] && [ -f "$SOURCE_DIR/oh-my-openagent.harness.json" ]; then
+if [ -f "$OMO_AGENT_CONFIG_FILE" ] && [ -f "$SOURCE_DIR/oh-my-openagent.harness.json" ]; then
   python3 - "$OMO_AGENT_CONFIG_FILE" "$SOURCE_DIR/oh-my-openagent.harness.json" <<'PY'
 import json
 import sys
@@ -231,3 +205,22 @@ PY
 fi
 
 echo -e "${GREEN}🎉 Uninstall complete.${NC}"
+
+# ── Remove harness launcher and observability CLI ──────────────────
+HARNESS_LAUNCHER="$HOME/.local/bin/harness"
+if [ -L "$HARNESS_LAUNCHER" ]; then
+  rm "$HARNESS_LAUNCHER"
+  echo -e "  ✅ removed harness launcher link: $HARNESS_LAUNCHER"
+fi
+HCTL="$HOME/.local/bin/hctl"
+if [ -L "$HCTL" ]; then
+  rm "$HCTL"
+  echo -e "  ✅ removed hctl CLI link: $HCTL"
+fi
+
+# ── Remove schemas symlink ────────────────────────────────────────
+SCHEMAS_LINK="$HOOKS_DIR/schemas"
+if [ -L "$SCHEMAS_LINK" ]; then
+  rm "$SCHEMAS_LINK"
+  echo -e "  ✅ removed schemas link: $SCHEMAS_LINK"
+fi

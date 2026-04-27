@@ -9,13 +9,9 @@ const targetDirectory = path.resolve(pluginRoot, 'config');
 const targetPath = path.resolve(targetDirectory, 'routing-table.json');
 
 async function main() {
-  try {
-    const nextContent = await readFile(sourcePath, 'utf8');
-    await mkdir(targetDirectory, { recursive: true });
-    await writeFile(targetPath, nextContent, 'utf8');
-  } catch (error) {
-    if (error?.code !== 'ENOENT') throw error;
-  }
+  const nextContent = await readFile(sourcePath, 'utf8');
+  await mkdir(targetDirectory, { recursive: true });
+  await writeFile(targetPath, nextContent, 'utf8');
 }
 
 await main();

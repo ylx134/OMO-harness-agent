@@ -44,6 +44,7 @@ export interface GraphStateLike {
   heldLocks?: Record<string, string>;
   pendingCapabilityHands?: string[];
   pendingProbes?: string[];
+  activeDispatch?: { actor?: string | null } | null;
 }
 
 export interface RouteConfigShape {

@@ -1,0 +1,18 @@
+#!/bin/bash
+# Harness mode launcher for OpenCode
+# Usage: harness [opencode flags] [directory]
+#   harness .              → start harness-orchestrator in current dir
+#   harness -c .           → continue last session
+#   harness --agent ... .  → custom agent
+
+set -euo pipefail
+export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config/opencode-profiles/harness-pure}"
+
+AGENT="${HARNESS_AGENT:-harness-orchestrator}"
+
+# Check if user already specified --agent
+if [[ "$*" != *"--agent"* ]]; then
+  exec opencode --agent "$AGENT" "$@"
+else
+  exec opencode "$@"
+fi

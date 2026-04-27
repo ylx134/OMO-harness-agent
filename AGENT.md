@@ -38,7 +38,7 @@
 - managers 写 contract、summary、decision，并维护明确 handoff
 - hands / probes 产出细节证据，例如命令输出、截图、API traces、artifact findings
 
-`.agent-memory/` 是 durable state，不是随手堆日志的目录。上层看摘要，下层保留细节，必要时再向下钻取。这里的 summary / evidence / probe 边界也不是纯约定，仓库默认依赖 hooks 把这些边界变成可执行约束。
+`.agent-memory/` 是 durable state，不是随手堆日志的目录。上层看摘要，下层保留细节，必要时再向下钻取。这里的 summary / evidence / probe 边界也不是纯约定，仓库默认依赖 hooks（`manager-boundary-guard.js`、`schema-guard.js`、`summary-supervision-guard.js` 等）把这些边界变成可执行约束。
 
 ## Replaceable workers 原则
 

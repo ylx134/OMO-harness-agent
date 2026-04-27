@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omo-harness.dev/schemas/state-index.schema.json",
+  "title": "Managed Agent State Index",
+  "description": "Schema for the managed-agent-state-index.json / state-index.json file that provides a machine-readable summary of harness runtime state.",
+  "type": "object",
+  "required": ["version", "mode", "last_updated"],
+  "properties": {
+    "version": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 10
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["omo-default", "managed-agents", "harness"]
+    },
+    "last_updated": {
+      "type": "string",
+      "description": "ISO-8601 timestamp"
+    },
+    "route": {
+      "type": "object",
+      "properties": {
+        "request_id": { "type": "string" },
+        "route_id": {
+          "type": "string",
+          "pattern": "^(J-L1|F-M1|C-M1|A-M1|P-H1)$"
+        },
+        "task_type": {
+          "type": "string",
+          "enum": ["判断型", "修复型", "改造型", "能力型", "产品型"]
+        },
+        "flow_tier": {
+          "type": "string",
+          "enum": ["轻流程", "中流程", "重流程"]
+        },
+        "semantic_lock_status": {
+          "type": "string",
+          "enum": ["locked", "needs_clarification", "none"]
+        },
+        "semantic_lock_text": { "type": "string" },
+        "current_phase": {
+          "type": "string",
+          "enum": ["intake", "route-selection", "planning", "execution", "acceptance", "complete", "blocked"]
+        },
+        "next_expected_actor": { "type": "string" },
+        "blocked": { "type": "boolean" },
+        "blocked_reason": { "type": "string" }
+      }
+    },
+    "required_manager_dispatch": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "pending_manager_dispatch": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "dispatched_managers": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "required_capability_hands": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "selected_capability_hands": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "pending_capability_hands": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "dispatched_capability_hands": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "required_probes": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "selected_probes": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "pending_probes": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "dispatched_probes": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "deferred_dispatch_state": {
+      "type": "string",
+      "enum": ["ready", "in-progress", "complete", "blocked"]
+    },
+    "last_completed_actor": { "type": "string" },
+    "graph_runtime": {
+      "type": "object",
+      "properties": {
+        "active_step_ids": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "ready_step_ids": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "blocked_step_ids": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "held_locks": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "signal_summary": {
+          "type": "object",
+          "properties": {
+            "total": { "type": "number" },
+            "emitted": { "type": "number" },
+            "pending": { "type": "number" },
+            "emitted_signal_names": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "pending_signal_names": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "features": {
+      "type": "object",
+      "properties": {
+        "completed": { "type": "number" },
+        "total": { "type": "number" }
+      }
+    },
+    "acceptance": {
+      "type": "object",
+      "properties": {
+        "accepted_probe_producers": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "probe_requirements": {
+      "type": "object",
+      "properties": {
+        "current": {
+          "type": "object",
+          "properties": {
+            "ui": { "type": "boolean" },
+            "api": { "type": "boolean" },
+            "regression": { "type": "boolean" },
+            "artifact": { "type": "boolean" },
+            "reason": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

@@ -8,6 +8,8 @@ import { actorForAuthorizedSession, authorizeDeferredChildActor, listLiveDeferre
 import { completeGraphStep } from '../dispatch/completion.js';
 import { reconcileRuntime } from '../dispatch/reconcile.js';
 import { markStepInProgress, recordStepRetryableError, stepIdForActorPhase } from '../dispatch/recovery.js';
+import { guardFileWrite } from '../dispatch/phase-guard.js';
+import { lazyProvisionIfNeeded } from '../dispatch/lazy-provision.js';
 import { createGraphRuntimeRollout, isManualHarnessMode, rolloutBudgetsForState } from '../mode/index.js';
 import {
   buildManagedAgentIndexProjection,
@@ -15,6 +17,7 @@ import {
   buildStatusProjection,
 } from '../observability/projections.js';
 import { routeConfig } from '../routing/table.js';
+import { deriveNextExpectedActor } from '../state/next-expected-actor.js';
 import {
   buildAcceptanceClosurePrompt,
   buildCapabilityHandDispatchPrompt,
@@ -236,7 +239,7 @@ function buildTaskDocument(message, routeId, route, semanticLock) {
     '',
     'Phase G1: Intake and route lock',
     '- Purpose: Capture the request, lock the meaning, and write authoritative state artifacts.',
-    '- Boundary: No manager, hand, or probe progression happens here.',
+    '- Boundary: Intake always writes state first; default mode may auto-dispatch the first legal actor after intake, while --manual stops here.',
     `- Done condition: Semantic lock is ${semanticLock.status} and intake artifacts are synchronized.`,
     '',
     'Phase G2: Deferred progression',
@@ -509,7 +512,7 @@ export async function initializeHarnessTask(workspace, message, agent, routeIdOv
     taskType: route.taskType,
     flowTier: route.flowTier,
     currentPhase: semanticLock.status === 'locked' ? 'intake' : 'blocked',
-    nextExpectedActor: semanticLock.status === 'locked' ? (route.managers[0] || 'none') : 'none',
+    nextExpectedActor: semanticLock.status === 'locked' ? deriveNextExpectedActor({ compat: undefined, nextExpectedActor: undefined, pendingManagers: route.managers }) : 'none',
     requiredManagers: route.managers,
     pendingManagers: [...route.managers],
     dispatchedManagers: [],
@@ -1235,7 +1238,7 @@ async function dispatchNextDeferredManager(client, workspace, state, requestedMa
     },
     dispatchedManagers: Array.from(new Set([...(state.dispatchedManagers || []), manager])),
     currentPhase: manager === 'execution-manager' ? 'execution' : manager === 'acceptance-manager' ? 'acceptance' : 'planning',
-    nextExpectedActor: manager,
+    nextExpectedActor: deriveNextExpectedActor({ ...state, compat: undefined, nextExpectedActor: undefined, activeDispatch: { ...state.activeDispatch, actor: manager, phase: 'manager', stepId: stepIdForActorPhase(state, manager, 'manager') }, pendingManagers: state.pendingManagers, pendingCapabilityHands: state.pendingCapabilityHands, pendingProbes: state.pendingProbes }),
     deferredDispatchState: 'manager_in_progress',
     lastDispatchError: null,
   };
@@ -1280,7 +1283,7 @@ async function dispatchNextDeferredHand(client, workspace, state, requestedCapab
     },
     dispatchedCapabilityHands: Array.from(new Set([...(state.dispatchedCapabilityHands || []), capabilityName])),
     currentPhase: 'execution',
-    nextExpectedActor: capabilityName,
+    nextExpectedActor: deriveNextExpectedActor({ ...state, compat: undefined, nextExpectedActor: undefined, activeDispatch: { ...state.activeDispatch, actor: capabilityName, phase: 'capability-hand', stepId: stepIdForActorPhase(state, capabilityName, 'capability-hand') }, pendingManagers: state.pendingManagers, pendingCapabilityHands: state.pendingCapabilityHands, pendingProbes: state.pendingProbes }),
     deferredDispatchState: 'hand_in_progress',
     lastDispatchError: null,
   };
@@ -1325,7 +1328,7 @@ async function dispatchNextDeferredProbe(client, workspace, state, requestedProb
     },
     dispatchedProbes: Array.from(new Set([...(state.dispatchedProbes || []), probeName])),
     currentPhase: 'probe-verification',
-    nextExpectedActor: probeName,
+    nextExpectedActor: deriveNextExpectedActor({ ...state, compat: undefined, nextExpectedActor: undefined, activeDispatch: { ...state.activeDispatch, actor: probeName, phase: 'probe', stepId: stepIdForActorPhase(state, probeName, 'probe') }, pendingManagers: state.pendingManagers, pendingCapabilityHands: state.pendingCapabilityHands, pendingProbes: state.pendingProbes }),
     deferredDispatchState: 'probe_in_progress',
     lastDispatchError: null,
   };
@@ -1345,7 +1348,7 @@ async function finalizeDeferredAcceptance(client, workspace, state) {
   const missingDeliverables = route.deliverables.filter((name) => !completedDeliverables.includes(name));
   if (missingDeliverables.length > 0) {
     const blockedAt = nowIso();
-    const nextState = {
+    const baseState = {
       ...recordStepRetryableError(state, {
         stepId: stepIdForActorPhase(state, 'acceptance-manager', 'acceptance-closure'),
         message: `missing deliverables: ${missingDeliverables.join(', ')}`,
@@ -1360,8 +1363,11 @@ async function finalizeDeferredAcceptance(client, workspace, state) {
         message: `missing deliverables: ${missingDeliverables.join(', ')}`,
         at: blockedAt,
       },
-      nextExpectedActor: 'acceptance-manager',
       currentPhase: 'acceptance',
+    };
+    const nextState = {
+      ...baseState,
+      nextExpectedActor: 'acceptance-manager',
     };
     await savePluginState(workspace, nextState);
     await syncManagedAgentIndex(workspace);
@@ -1422,10 +1428,7 @@ async function completeDeferredManager(workspace, state, managerName, completion
     pendingManagers,
     activeDispatch: null,
     currentPhase: completedManagerPhase(managerName),
-    nextExpectedActor: pendingManagers[0]
-      || ((completed.state.pendingCapabilityHands || [])[0])
-      || ((completed.state.pendingProbes || [])[0])
-      || (completed.state.dispatchedManagers?.includes('acceptance-manager') ? 'acceptance-manager' : 'none'),
+    nextExpectedActor: deriveNextExpectedActor({ ...completed.state, compat: undefined, nextExpectedActor: undefined, activeDispatch: null, pendingManagers, pendingCapabilityHands: completed.state.pendingCapabilityHands, pendingProbes: completed.state.pendingProbes }),
     deferredDispatchState: 'ready',
     lastCompletedActor: managerName,
     lastDispatchError: null,
@@ -1449,7 +1452,7 @@ async function completeDeferredCapabilityHand(workspace, state, capabilityName, 
     pendingCapabilityHands,
     activeDispatch: null,
     currentPhase: 'execution',
-    nextExpectedActor: pendingCapabilityHands[0] || (completed.state.pendingManagers?.[0] || 'acceptance-manager'),
+    nextExpectedActor: deriveNextExpectedActor({ ...completed.state, compat: undefined, nextExpectedActor: undefined, activeDispatch: null, pendingManagers: completed.state.pendingManagers, pendingCapabilityHands, pendingProbes: completed.state.pendingProbes }),
     deferredDispatchState: 'ready',
     lastCompletedActor: capabilityName,
     lastDispatchError: null,
@@ -1473,7 +1476,7 @@ async function completeDeferredProbe(workspace, state, probeName, completionSour
     pendingProbes,
     activeDispatch: null,
     currentPhase: 'probe-verification',
-    nextExpectedActor: pendingProbes[0] || 'acceptance-manager',
+    nextExpectedActor: deriveNextExpectedActor({ ...completed.state, compat: undefined, nextExpectedActor: undefined, activeDispatch: null, pendingManagers: completed.state.pendingManagers, pendingCapabilityHands: completed.state.pendingCapabilityHands, pendingProbes }),
     deferredDispatchState: 'ready',
     lastCompletedActor: probeName,
     lastDispatchError: null,
@@ -1498,7 +1501,7 @@ async function completeDeferredAcceptanceClosure(workspace, state, completionSou
     activeDispatch: null,
     completedDeliverables,
     currentPhase: 'complete',
-    nextExpectedActor: 'none',
+    nextExpectedActor: deriveNextExpectedActor({ ...completed.state, compat: undefined, nextExpectedActor: undefined, activeDispatch: null, currentPhase: 'complete', deferredDispatchState: 'complete', pendingManagers: completed.state.pendingManagers, pendingCapabilityHands: completed.state.pendingCapabilityHands, pendingProbes: completed.state.pendingProbes }),
     deferredDispatchState: 'complete',
     lastCompletedActor: 'acceptance-manager',
     lastDispatchError: null,
@@ -1830,6 +1833,25 @@ export const server = async (input) => {
       await requireHarnessManagerDispatch(workspace, hookInput.tool, output.args, activeAgent);
       await guardExecutionManager(workspace, hookInput.tool, output.args, activeAgent);
       await guardAcceptanceManager(workspace, hookInput.tool, output.args, activeAgent);
+
+      // ── Phase-Actor File Write Authorization (#1) ──────────────────
+      const toolName = lower(hookInput.tool);
+      if ((toolName === 'edit' || toolName === 'write') && state?.mode === 'harness' && currentAgent) {
+        const toolArgs = output?.args || hookInput?.args || {};
+        const targetPath = toolArgs.file_path || toolArgs.path || '';
+        const content = toolArgs.content || toolArgs.new_string || '';
+        const blockReason = guardFileWrite(currentAgent, targetPath, content, state);
+        if (blockReason) {
+          await appendPluginDebug(workspace, 'phase-guard.blocked', {
+            actor: currentAgent,
+            file: targetPath,
+            reason: blockReason.slice(0, 200),
+          });
+          throw new Error(blockReason);
+        }
+      }
+      // ── End Phase-Actor Guard ──────────────────────────────────────
+
       if (lower(hookInput.tool) === 'task') {
         await recordDispatch(workspace, output.args);
         await syncManagedAgentIndex(workspace);

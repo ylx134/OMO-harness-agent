@@ -3,6 +3,7 @@
 import { recoverGraphRuntimeState } from './recovery.js';
 import { selectNextDispatchPlan } from './scheduler.js';
 import { reconcileActiveDispatchTransition } from './transitions.js';
+import { lazyProvisionIfNeeded } from './lazy-provision.js';
 
 function shouldAutoAdvance(state, options) {
   if (options.forceDispatch) return true;
@@ -35,6 +36,19 @@ export async function reconcileRuntime(context) {
   });
 
   let nextState = recoverGraphRuntimeState(state);
+
+  // ── Lazy Provision (#4): select hands/probes when needed ──
+  const patches = lazyProvisionIfNeeded(nextState);
+  if (patches) {
+    nextState = { ...nextState, ...patches };
+    nextState = recoverGraphRuntimeState(nextState);
+    await appendPluginDebug(workspace, 'lazy.provision.applied', {
+      handsSelected: Boolean(patches.selectedCapabilityHands?.length),
+      probesSelected: Boolean(patches.selectedProbes?.length),
+    });
+  }
+  // ── End Lazy Provision ────────────────────────────────────
+
   let transition = { kind: 'none', reason: 'no_transition_requested' };
 
   if (options.completeActiveDispatch) {

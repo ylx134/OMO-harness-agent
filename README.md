@@ -345,11 +345,34 @@ The exact number of `/drive` and `/check` repetitions depends on the selected ma
 
 If something looks wrong, check in this order:
 
+```bash
+# Quick one-line status
+hctl summary
+
+# Full runtime status
+hctl status
+
+# What's blocking progress
+hctl blockers
+
+# Event timeline
+hctl trace
+hctl events --last 20
+```
+
+For manual inspection:
 1. `.agent-memory/harness-plugin-state.json`
 2. `.agent-memory/orchestration-status.md`
 3. `.agent-memory/route-packet.json`
 4. `.agent-memory/managed-agent-state-index.json`
 5. `.agent-memory/harness-plugin-debug.log`
+
+### Runtime safety guards
+
+The harness now includes automatic structural integrity checks:
+- **Schema validation** — `routing-table.json`, `features.json`, and `state-index.json` are validated against JSON Schemas on every write, preventing silent corruption
+- **Summary-first supervision** — a hook warns when brain/manager agents read raw detail files instead of staying at the summary layer, catching drift from the summary-first architecture
+- **All existing hooks** continue to enforce manager/hand/probe boundaries, evidence requirements, and features.json immutability
 
 For plugin-local validation, this repo’s main check is:
 
@@ -379,7 +402,14 @@ omo-harness-skills/
 ├── regression-probe-agent/
 ├── artifact-probe-agent/
 ├── hooks/
+│   ├── schema-guard.js           # validates state files against schemas
+│   ├── summary-supervision-guard.js # warns on summary-first violations
+│   ├── schemas/                  # JSON Schema definitions for state files
+│   └── ...                       # other boundary-enforcement hooks
 ├── plugin/                     # Harness runtime control plane
+├── scripts/
+│   ├── harness                   # observability CLI (status/trace/blockers)
+│   └── ...                       # other utility scripts
 ├── agents/
 ├── docs/
 ├── setup.sh
@@ -394,9 +424,17 @@ omo-harness-skills/
 If you want the shortest, cleanest, most stable daily entrypoint:
 
 ```bash
-harness
+harness .
+```
+
+To inspect a running harness:
+
+```bash
+hctl status      # full runtime panel
+hctl blockers    # what's blocking progress
+hctl summary     # one-line shell prompt
 ```
 
 If you want the cleanest mental model, remember just this:
 
-> `harness` starts Harness-only mode, `/control` initializes a route, and `/plan` / `/drive` / `/check` advance it step by step until the graph and deliverables say it is truly done.
+> `harness` starts Harness mode, `/control` initializes a route, and `/plan` / `/drive` / `/check` advance it step by step until the graph and deliverables say it is truly done. Use `hctl` to observe the runtime state.

@@ -1,6 +1,7 @@
 // @ts-nocheck
 
 import { buildRouteFileContract } from '../state/file-contract.js';
+import { deriveNextExpectedActor } from '../state/next-expected-actor.js';
 import { projectLegacyState } from '../state/legacy-projection.js';
 
 function normalizeList(values) {
@@ -40,7 +41,14 @@ function legacyCompatFromState(state) {
     pendingManagers: projected.pendingManagers ?? state?.pendingManagers ?? state?.compat?.pendingManagers ?? [],
     pendingCapabilityHands: projected.pendingCapabilityHands ?? state?.pendingCapabilityHands ?? state?.compat?.pendingCapabilityHands ?? [],
     pendingProbes: projected.pendingProbes ?? state?.pendingProbes ?? state?.compat?.pendingProbes ?? [],
-    nextExpectedActor: projected.nextExpectedActor ?? state?.nextExpectedActor ?? state?.compat?.nextExpectedActor ?? 'none',
+    nextExpectedActor: deriveNextExpectedActor({
+      ...state,
+      activeDispatch: projected.activeDispatch ?? state?.activeDispatch ?? state?.compat?.activeDispatch ?? null,
+      pendingManagers: projected.pendingManagers ?? state?.pendingManagers ?? state?.compat?.pendingManagers ?? [],
+      pendingCapabilityHands: projected.pendingCapabilityHands ?? state?.pendingCapabilityHands ?? state?.compat?.pendingCapabilityHands ?? [],
+      pendingProbes: projected.pendingProbes ?? state?.pendingProbes ?? state?.compat?.pendingProbes ?? [],
+      deferredDispatchState: projected.deferredDispatchState ?? state?.deferredDispatchState ?? state?.compat?.deferredDispatchState ?? 'ready',
+    }),
     deferredDispatchState: projected.deferredDispatchState ?? state?.deferredDispatchState ?? state?.compat?.deferredDispatchState ?? 'ready',
     childDispatchSessionIDs: state?.compat?.childDispatchSessionIDs ?? state?.childDispatchSessionIDs ?? projected.childDispatchSessionIDs ?? null,
   };

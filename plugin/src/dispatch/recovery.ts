@@ -1,6 +1,7 @@
 // @ts-nocheck
 
 import { projectLegacyState } from '../state/legacy-projection.js';
+import { deriveNextExpectedActor } from '../state/next-expected-actor.js';
 import { createDefaultStepRuntime, normalizeStepRuntime } from '../state/schema.js';
 import { deriveHeldLocks } from './concurrency.js';
 import { deriveSignalSchedulingState, normalizeSignals } from './signals.js';
@@ -61,9 +62,19 @@ export function recoverGraphRuntimeState(state) {
       }
     : projected.activeDispatch;
 
-  const nextExpectedActor = activeDispatch?.actor
-    || state?.nextExpectedActor
-    || projected.nextExpectedActor;
+  const nextExpectedActor = deriveNextExpectedActor({
+    ...state,
+    compat: undefined,
+    nextExpectedActor: undefined,
+    stepRuntime,
+    graph: state.graph,
+    activeStepIds,
+    activeDispatch,
+    pendingManagers: projected.pendingManagers,
+    pendingCapabilityHands: projected.pendingCapabilityHands,
+    pendingProbes: projected.pendingProbes,
+    deferredDispatchState: state?.deferredDispatchState || projected.deferredDispatchState,
+  });
 
   return {
     ...state,

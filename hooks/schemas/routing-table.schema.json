@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omo-harness.dev/schemas/routing-table.schema.json",
+  "title": "Harness Routing Table",
+  "description": "Schema for the harness routing table that maps task types to routes, skill stacks, and deliverable requirements.",
+  "type": "object",
+  "required": ["routes", "category_mapping"],
+  "properties": {
+    "routes": {
+      "type": "object",
+      "minProperties": 1,
+      "patternProperties": {
+        "^(J-L1|F-M1|C-M1|A-M1|P-H1)$": {
+          "type": "object",
+          "required": [
+            "task_type",
+            "description",
+            "flow_tier",
+            "skill_stack",
+            "manager_requirements",
+            "capability_requirements",
+            "probe_requirements",
+            "startup_files",
+            "deliverables",
+            "anti_shallow_bar",
+            "execution_mode"
+          ],
+          "properties": {
+            "task_type": {
+              "type": "string",
+              "enum": ["判断型", "修复型", "改造型", "能力型", "产品型"]
+            },
+            "description": { "type": "string", "minLength": 1 },
+            "flow_tier": {
+              "type": "string",
+              "enum": ["轻流程", "中流程", "重流程"]
+            },
+            "skill_stack": {
+              "type": "array",
+              "items": { "type": "string" },
+              "minItems": 1
+            },
+            "manager_requirements": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "capability_requirements": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "probe_requirements": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "startup_files": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "deliverables": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "anti_shallow_bar": { "type": "string", "minLength": 1 },
+            "execution_mode": {
+              "type": "object",
+              "required": ["multi_agent", "single_thread_allowed", "requires_contract_negotiation"],
+              "properties": {
+                "multi_agent": { "type": "boolean" },
+                "single_thread_allowed": { "type": "boolean" },
+                "requires_contract_negotiation": { "type": "boolean" }
+              }
+            },
+            "scoring_config": {
+              "oneOf": [
+                { "type": "null" },
+                {
+                  "type": "object",
+                  "required": ["weights", "thresholds", "required_rubric", "pass_score"],
+                  "properties": {
+                    "weights": {
+                      "type": "object",
+                      "required": ["产品深度", "功能完整性", "视觉设计", "代码质量"],
+                      "properties": {
+                        "产品深度": { "type": "number", "minimum": 0, "maximum": 1 },
+                        "功能完整性": { "type": "number", "minimum": 0, "maximum": 1 },
+                        "视觉设计": { "type": "number", "minimum": 0, "maximum": 1 },
+                        "代码质量": { "type": "number", "minimum": 0, "maximum": 1 }
+                      }
+                    },
+                    "thresholds": {
+                      "type": "object",
+                      "required": ["产品深度", "功能完整性", "视觉设计", "代码质量"],
+                      "properties": {
+                        "产品深度": { "type": "number", "minimum": 1, "maximum": 10 },
+                        "功能完整性": { "type": "number", "minimum": 1, "maximum": 10 },
+                        "视觉设计": { "type": "number", "minimum": 1, "maximum": 10 },
+                        "代码质量": { "type": "number", "minimum": 1, "maximum": 10 }
+                      }
+                    },
+                    "required_rubric": { "type": "string" },
+                    "pass_score": { "type": "number", "minimum": 1, "maximum": 10 }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "category_mapping": {
+      "type": "object",
+      "required": ["判断型", "修复型", "改造型", "能力型", "产品型"],
+      "properties": {
+        "判断型": { "type": "string" },
+        "修复型": { "type": "string" },
+        "改造型": { "type": "string" },
+        "能力型": { "type": "string" },
+        "产品型": { "type": "string" }
+      }
+    }
+  }
+}

@@ -1,0 +1,530 @@
+#!/bin/bash
+# ─── Harness Observability CLI ────────────────────────────────────
+#
+# Read .agent-memory/ state and present human-readable summaries.
+# Designed for operators debugging harness runs.
+#
+# Usage:
+#   harness status              Show current route, phase, active actors
+#   harness trace --round N     Show event timeline for a specific round
+#   harness blockers            List all blocked steps and reasons
+#   harness events --last N     Show last N events from activity.jsonl
+#   harness summary             Quick one-line status for shell prompts
+#
+# Requires: .agent-memory/ directory in current workspace root.
+#           Looks up from cwd; set WORKSPACE_ROOT to override.
+# ──────────────────────────────────────────────────────────────────
+
+set -euo pipefail
+
+# ─── Locate workspace ─────────────────────────────────────────────
+
+find_workspace_root() {
+  local dir="${WORKSPACE_ROOT:-$PWD}"
+  # Walk up from current dir to find .agent-memory/
+  while [[ "$dir" != "/" ]]; do
+    if [[ -d "$dir/.agent-memory" ]]; then
+      echo "$dir"
+      return 0
+    fi
+    dir="$(dirname "$dir")"
+  done
+  return 1
+}
+
+# ─── Colors ───────────────────────────────────────────────────────
+
+BOLD='\033[1m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+CYAN='\033[0;36m'
+DIM='\033[2m'
+NC='\033[0m'
+
+# ─── Helpers ──────────────────────────────────────────────────────
+
+json_val() {
+  python3 -c "
+import json, sys, os
+try:
+    with open('$1') as f: d = json.load(f)
+except: sys.exit(1)
+keys = '$2'.split('.')
+for k in keys:
+    if isinstance(d, dict): d = d.get(k, None)
+    elif isinstance(d, list) and k.isdigit(): d = d[int(k)] if int(k) < len(d) else None
+    else: d = None
+if d is None:
+    print('N/A')
+elif isinstance(d, bool):
+    print('yes' if d else 'no')
+elif isinstance(d, list):
+    print(', '.join(str(x) for x in d) if d else 'none')
+elif isinstance(d, dict):
+    print(json.dumps(d, ensure_ascii=False))
+else:
+    print(d)
+" 2>/dev/null || echo "N/A"
+}
+
+marker() {
+  if [[ "$1" == "yes" ]] || [[ "$1" == "true" ]]; then
+    echo -e "${RED}⬤${NC}"
+  elif [[ "$1" == "no" ]] || [[ "$1" == "false" ]]; then
+    echo -e "${GREEN}◯${NC}"
+  else
+    echo -e "${DIM}?${NC}"
+  fi
+}
+
+phase_color() {
+  case "$1" in
+    "complete")  echo -e "${GREEN}$1${NC}" ;;
+    "blocked")   echo -e "${RED}$1${NC}" ;;
+    "execution") echo -e "${CYAN}$1${NC}" ;;
+    "planning")  echo -e "${YELLOW}$1${NC}" ;;
+    "acceptance")echo -e "${CYAN}$1${NC}" ;;
+    *)           echo "$1" ;;
+  esac
+}
+
+# ─── Subcommand: status ──────────────────────────────────────────
+
+cmd_status() {
+  local root="${1:-$(find_workspace_root)}"
+  if [[ -z "$root" ]]; then
+    echo -e "${RED}ERROR: No .agent-memory/ found in or above current directory${NC}"
+    echo "  Set WORKSPACE_ROOT=/path/to/project to override."
+    exit 1
+  fi
+
+  local memory="$root/.agent-memory"
+  local state_index="$memory/managed-agent-state-index.json"
+  local status_md="$memory/orchestration-status.md"
+  local execution_md="$memory/execution-status.md"
+
+  echo ""
+  echo -e "${BOLD}╔══════════════════════════════════════════════════════╗${NC}"
+  echo -e "${BOLD}║${NC}         ${CYAN}Harness Runtime Status${NC}                         ${BOLD}║${NC}"
+  echo -e "${BOLD}╚══════════════════════════════════════════════════════╝${NC}"
+  echo ""
+
+  # Workspace
+  echo -e "${BOLD}Workspace:${NC} ${DIM}$root${NC}"
+
+  # Route info
+  local route_id task_type flow_tier phase blocked blocked_reason
+  route_id="$(json_val "$state_index" 'route.route_id')"
+  task_type="$(json_val "$state_index" 'route.task_type')"
+  flow_tier="$(json_val "$state_index" 'route.flow_tier')"
+  phase="$(json_val "$state_index" 'route.current_phase')"
+  blocked="$(json_val "$state_index" 'route.blocked')"
+  blocked_reason="$(json_val "$state_index" 'route.blocked_reason')"
+
+  echo ""
+  echo -e "${BOLD}Route:${NC}       ${GREEN}${route_id}${NC}"
+  echo -e "${BOLD}Task Type:${NC}    ${task_type}"
+  echo -e "${BOLD}Flow Tier:${NC}    ${flow_tier}"
+  echo -e "${BOLD}Phase:${NC}        $(phase_color "$phase")"
+  echo -e "${BOLD}Blocked:${NC}      $(marker "$blocked") ${blocked_reason}"
+
+  # Next expected actor
+  local next_actor="$(json_val "$state_index" 'route.next_expected_actor')"
+  echo -e "${BOLD}Next Actor:${NC}   ${next_actor}"
+
+  # Managers
+  local dispatched_mgrs pending_mgrs
+  dispatched_mgrs="$(json_val "$state_index" 'dispatched_managers')"
+  pending_mgrs="$(json_val "$state_index" 'pending_manager_dispatch')"
+  echo -e "${BOLD}Managers:${NC}     dispatched=[${dispatched_mgrs}]  pending=[${pending_mgrs}]"
+
+  # Capability hands
+  local dispatched_hands pending_hands selected_hands
+  dispatched_hands="$(json_val "$state_index" 'dispatched_capability_hands')"
+  pending_hands="$(json_val "$state_index" 'pending_capability_hands')"
+  selected_hands="$(json_val "$state_index" 'selected_capability_hands')"
+  echo -e "${BOLD}Hands:${NC}        dispatched=[${dispatched_hands}]  pending=[${pending_hands}]"
+  echo -e "${DIM}  selected: [${selected_hands}]${NC}"
+
+  # Probes
+  local dispatched_probes pending_probes selected_probes
+  dispatched_probes="$(json_val "$state_index" 'dispatched_probes')"
+  pending_probes="$(json_val "$state_index" 'pending_probes')"
+  selected_probes="$(json_val "$state_index" 'selected_probes')"
+  echo -e "${BOLD}Probes:${NC}       dispatched=[${dispatched_probes}]  pending=[${pending_probes}]"
+  echo -e "${DIM}  selected: [${selected_probes}]${NC}"
+
+  # Graph runtime
+  local active_steps ready_steps blocked_steps held_locks
+  active_steps="$(json_val "$state_index" 'graph_runtime.active_step_ids')"
+  ready_steps="$(json_val "$state_index" 'graph_runtime.ready_step_ids')"
+  blocked_steps="$(json_val "$state_index" 'graph_runtime.blocked_step_ids')"
+
+  echo ""
+  echo -e "${BOLD}Graph Runtime:${NC}"
+  echo -e "  Active steps:  ${CYAN}${active_steps}${NC}"
+  echo -e "  Ready steps:   ${GREEN}${ready_steps}${NC}"
+  echo -e "  Blocked steps: ${RED}${blocked_steps}${NC}"
+
+  # Held locks
+  local locks
+  locks="$(json_val "$state_index" 'graph_runtime.held_locks')"
+  if [[ "$locks" != "N/A" ]] && [[ "$locks" != "none" ]] && [[ "$locks" != "{}" ]]; then
+    echo -e "  Held locks:    ${YELLOW}${locks}${NC}"
+  fi
+
+  # Signal summary
+  local sig_total sig_emitted sig_pending
+  sig_total="$(json_val "$state_index" 'graph_runtime.signal_summary.total')"
+  sig_emitted="$(json_val "$state_index" 'graph_runtime.signal_summary.emitted')"
+  sig_pending="$(json_val "$state_index" 'graph_runtime.signal_summary.pending')"
+  echo -e "  Signals:       ${GREEN}${sig_emitted} emitted${NC} / ${YELLOW}${sig_pending} pending${NC} / ${sig_total} total"
+
+  # Features (if present)
+  local feat_completed feat_total
+  feat_completed="$(json_val "$state_index" 'features.completed')"
+  feat_total="$(json_val "$state_index" 'features.total')"
+  if [[ "$feat_total" != "N/A" ]] && [[ "$feat_total" != "0" ]]; then
+    echo ""
+    echo -e "${BOLD}Features:${NC}     ${GREEN}${feat_completed}${NC} / ${feat_total} completed"
+  fi
+
+  # Deferred dispatch
+  local deferred
+  deferred="$(json_val "$state_index" 'deferred_dispatch_state')"
+  echo -e "${BOLD}Deferred:${NC}     ${deferred}"
+
+  echo ""
+  echo -e "${DIM}Source: $state_index${NC}"
+  echo ""
+
+  # Show last few lines of execution status if available
+  if [[ -f "$execution_md" ]]; then
+    echo -e "${BOLD}── Execution Status (last 10 lines) ──${NC}"
+    tail -10 "$execution_md" | sed 's/^/  /'
+    echo ""
+  fi
+}
+
+# ─── Subcommand: trace ───────────────────────────────────────────
+
+cmd_trace() {
+  local root round_num
+  root="$(find_workspace_root)"
+  round_num=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --round) round_num="$2"; shift 2 ;;
+      *) shift ;;
+    esac
+  done
+
+  if [[ -z "$root" ]]; then
+    echo -e "${RED}ERROR: No .agent-memory/ found${NC}"
+    exit 1
+  fi
+
+  local activity="$root/.agent-memory/activity.jsonl"
+  if [[ ! -f "$activity" ]]; then
+    echo -e "${YELLOW}No activity.jsonl found at $activity${NC}"
+    exit 0
+  fi
+
+  echo ""
+  echo -e "${BOLD}╔══════════════════════════════════════════════════════╗${NC}"
+  echo -e "${BOLD}║${NC}         ${CYAN}Harness Activity Trace${NC}                        ${BOLD}║${NC}"
+  echo -e "${BOLD}╚══════════════════════════════════════════════════════╝${NC}"
+  echo ""
+
+  local filter="."
+  if [[ -n "$round_num" ]]; then
+    filter="select(.round==${round_num} or .round==\"${round_num}\")"
+    echo -e "${BOLD}Filter:${NC} round ${round_num}"
+  fi
+
+  echo ""
+
+  # Parse and display
+  python3 -c "
+import json, sys
+
+events = []
+with open('$activity') as f:
+    for line in f:
+        line = line.strip()
+        if not line: continue
+        try:
+            ev = json.loads(line)
+            events.append(ev)
+        except: pass
+
+if not events:
+    print('  (no events recorded)')
+    sys.exit(0)
+
+# Filter
+if '$filter' != '.':
+    try:
+        rn = int('$round_num') if '$round_num'.isdigit() else '$round_num'
+        events = [e for e in events if e.get('round') == rn or str(e.get('round')) == str('$round_num')]
+    except: pass
+
+if not events:
+    print(f'  (no events match filter)')
+    sys.exit(0)
+
+# Display
+type_colors = {
+    'agent_spawned': '\033[0;32m',   # green
+    'agent_completed': '\033[0;32m',
+    'acceptance_completed': '\033[1;36m', # cyan
+    'git_commit': '\033[0;33m',      # yellow
+    'context_reset': '\033[0;31m',   # red
+    'state_index_updated': '\033[2m',
+    'file_written': '\033[2m',
+    'inbox_received': '\033[0;35m',  # magenta
+}
+NC = '\033[0m'
+
+for i, ev in enumerate(events):
+    ts = ev.get('time', '')[:19].replace('T', ' ')
+    etype = ev.get('event_type', '?')
+    color = type_colors.get(etype, '')
+    
+    detail = ''
+    if etype == 'agent_spawned':
+        detail = f\"{ev.get('type', '?')} id={ev.get('id', '?')[:12]}\"
+    elif etype == 'agent_completed':
+        detail = f\"{ev.get('type', '?')} status={ev.get('status', '?')}\"
+    elif etype == 'acceptance_completed':
+        detail = f\"round={ev.get('round', '?')} decision={ev.get('decision', '?')}\"
+    elif etype == 'git_commit':
+        detail = ev.get('message', '?')[:60]
+    elif etype == 'context_reset':
+        detail = ev.get('reason', '?')
+    elif etype == 'file_written':
+        detail = ev.get('file', '?')
+    elif etype == 'state_index_updated':
+        detail = f\"route={ev.get('route_id', '?')} round={ev.get('round', '?')}\"
+    elif etype == 'inbox_resolved':
+        detail = f\"REQ-{ev.get('req_id', '?')} action={ev.get('action', '?')}\"
+    elif etype == 'skill_invoked':
+        detail = ev.get('skill', '?')
+    else:
+        detail = json.dumps({k:v for k,v in ev.items() if k not in ('time','event_type')}, ensure_ascii=False)[:60]
+    
+    print(f'  [{ts}]  {color}{etype}{NC}  {detail}')
+" || echo -e "${YELLOW}  (could not parse activity.jsonl)${NC}"
+  echo ""
+}
+
+# ─── Subcommand: blockers ────────────────────────────────────────
+
+cmd_blockers() {
+  local root
+  root="$(find_workspace_root)"
+
+  if [[ -z "$root" ]]; then
+    echo -e "${RED}ERROR: No .agent-memory/ found${NC}"
+    exit 1
+  fi
+
+  local memory="$root/.agent-memory"
+  local state_index="$memory/managed-agent-state-index.json"
+
+  echo ""
+  echo -e "${BOLD}╔══════════════════════════════════════════════════════╗${NC}"
+  echo -e "${BOLD}║${NC}            ${RED}Harness Blockers${NC}                              ${BOLD}║${NC}"
+  echo -e "${BOLD}╚══════════════════════════════════════════════════════╝${NC}"
+  echo ""
+
+  local is_blocked blocked_reason
+  is_blocked="$(json_val "$state_index" 'route.blocked')"
+  blocked_reason="$(json_val "$state_index" 'route.blocked_reason')"
+
+  if [[ "$is_blocked" != "yes" ]] && [[ "$is_blocked" != "true" ]]; then
+    echo -e "  ${GREEN}✓ No top-level route blocking${NC}"
+  else
+    echo -e "  ${RED}⬤ Route blocked:${NC} ${blocked_reason}"
+    echo ""
+  fi
+
+  local blocked_steps
+  blocked_steps="$(json_val "$state_index" 'graph_runtime.blocked_step_ids')"
+
+  if [[ "$blocked_steps" != "none" ]] && [[ "$blocked_steps" != "N/A" ]] && [[ -n "$blocked_steps" ]]; then
+    echo -e "${BOLD}Blocked Graph Steps:${NC}"
+    local IFS=','
+    for step in $blocked_steps; do
+      step="$(echo "$step" | xargs)"
+      echo -e "  ${RED}⬤${NC} $step"
+    done
+    echo ""
+  fi
+
+  # Check for missing deliverables
+  local missing_deliv
+  if [[ -f "$memory/route-packet.json" ]]; then
+    missing_deliv="$(python3 -c "
+import json
+try:
+    with open('$memory/route-packet.json') as f: d = json.load(f)
+    missing = d.get('missingDeliverables', [])
+    if missing:
+        print(', '.join(missing))
+except: pass
+" 2>/dev/null)"
+    if [[ -n "$missing_deliv" ]] && [[ "$missing_deliv" != "none" ]]; then
+      echo -e "${BOLD}Missing Deliverables:${NC}"
+      echo -e "  ${YELLOW}⚠${NC}  ${missing_deliv}"
+      echo ""
+    fi
+  fi
+
+  # Check pending dispatch
+  local pending_hands pending_probes pending_mgrs
+  pending_hands="$(json_val "$state_index" 'pending_capability_hands')"
+  pending_probes="$(json_val "$state_index" 'pending_probes')"
+  pending_mgrs="$(json_val "$state_index" 'pending_manager_dispatch')"
+
+  if [[ "$pending_mgrs" != "none" ]]; then
+    echo -e "${BOLD}Pending Managers:${NC}  ${YELLOW}${pending_mgrs}${NC}"
+    echo -e "  ${DIM}These managers have not yet been dispatched.${NC}"
+    echo ""
+  fi
+  if [[ "$pending_hands" != "none" ]]; then
+    echo -e "${BOLD}Pending Capability Hands:${NC}  ${YELLOW}${pending_hands}${NC}"
+    echo -e "  ${DIM}These hands have not yet executed. Run /drive to advance.${NC}"
+    echo ""
+  fi
+  if [[ "$pending_probes" != "none" ]]; then
+    echo -e "${BOLD}Pending Probes:${NC}  ${YELLOW}${pending_probes}${NC}"
+    echo -e "  ${DIM}These probes have not yet collected evidence. Run /check to advance.${NC}"
+    echo ""
+  fi
+
+  # Quality guardrails
+  if [[ -f "$memory/quality-guardrails.md" ]]; then
+    echo -e "${BOLD}Active Quality Guardrails:${NC}"
+    grep '^### Rule' "$memory/quality-guardrails.md" 2>/dev/null | while read -r line; do
+      echo -e "  ${CYAN}◆${NC} ${line}"
+    done
+    echo ""
+  fi
+
+  if [[ "$is_blocked" != "yes" ]] && [[ "$is_blocked" != "true" ]] && [[ "$blocked_steps" == "none" ]] && [[ "$pending_mgrs" == "none" ]] && [[ "$pending_hands" == "none" ]] && [[ "$pending_probes" == "none" ]]; then
+    echo -e "  ${GREEN}✓ No blockers detected — route is clear${NC}"
+  fi
+  echo ""
+}
+
+# ─── Subcommand: events ──────────────────────────────────────────
+
+cmd_events() {
+  local root last_n="20"
+  root="$(find_workspace_root)"
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --last) last_n="$2"; shift 2 ;;
+      *) shift ;;
+    esac
+  done
+
+  if [[ -z "$root" ]]; then
+    echo -e "${RED}ERROR: No .agent-memory/ found${NC}"
+    exit 1
+  fi
+
+  local activity="$root/.agent-memory/activity.jsonl"
+  if [[ ! -f "$activity" ]]; then
+    echo -e "${YELLOW}No activity.jsonl found at $activity${NC}"
+    exit 0
+  fi
+
+  echo -e "${BOLD}Last ${last_n} events:${NC}"
+  echo ""
+
+  tail -n "$last_n" "$activity" 2>/dev/null | python3 -c "
+import json, sys
+for line in sys.stdin:
+    line = line.strip()
+    if not line: continue
+    try:
+        ev = json.loads(line)
+        ts = ev.get('time','')[:19].replace('T',' ')
+        etype = ev.get('event_type','?')
+        detail = json.dumps({k:v for k,v in ev.items() if k not in ('time','event_type')}, ensure_ascii=False)[:80]
+        print(f'  [{ts}] {etype:24s} {detail}')
+    except:
+        print(f'  {line[:120]}')
+" || tail -n "$last_n" "$activity"
+  echo ""
+}
+
+# ─── Subcommand: summary ─────────────────────────────────────────
+
+cmd_summary() {
+  local root
+  root="$(find_workspace_root 2>/dev/null)" || true
+
+  if [[ -z "$root" ]]; then
+    echo "[no harness]"
+    return 0
+  fi
+
+  local state_index="$root/.agent-memory/managed-agent-state-index.json"
+  if [[ ! -f "$state_index" ]]; then
+    echo "[no state]"
+    return 0
+  fi
+
+  local route_id task_type phase blocked features
+  route_id="$(json_val "$state_index" 'route.route_id')"
+  task_type="$(json_val "$state_index" 'route.task_type')"
+  phase="$(json_val "$state_index" 'route.current_phase')"
+  blocked="$(json_val "$state_index" 'route.blocked')"
+  features="$(json_val "$state_index" 'features.completed')/$(json_val "$state_index" 'features.total')"
+
+  local blk=""
+  [[ "$blocked" == "yes" ]] && blk=" BLOCKED"
+
+  echo "[${route_id:-?} ${phase:-?}${blk}] ${features}"
+}
+
+# ─── Main ────────────────────────────────────────────────────────
+
+main() {
+  local command="${1:-status}"
+  shift 2>/dev/null || true
+
+  case "$command" in
+    status)   cmd_status "$@" ;;
+    trace)    cmd_trace "$@" ;;
+    blockers) cmd_blockers "$@" ;;
+    events)   cmd_events "$@" ;;
+    summary)  cmd_summary "$@" ;;
+    help|--help|-h)
+      echo "Usage: harness <command> [options]"
+      echo ""
+      echo "Commands:"
+      echo "  status              Show current route, phase, actors, and graph state"
+      echo "  trace --round N     Show event timeline (optional: filter by round)"
+      echo "  blockers            List all blocked steps, pending dispatch, and guardrails"
+      echo "  events --last N     Show last N raw events from activity.jsonl"
+      echo "  summary             One-line status for shell prompts"
+      echo ""
+      echo "Environment:"
+      echo "  WORKSPACE_ROOT      Override workspace directory (default: auto-detect)"
+      ;;
+    *)
+      echo -e "${RED}Unknown command: $command${NC}"
+      echo "Try 'harness help' for usage."
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"

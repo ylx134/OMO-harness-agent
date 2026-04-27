@@ -2,11 +2,11 @@
 import { compileRouteGraph } from '../routing/graph.js';
 import { resolveGraphRuntimeRollout } from '../mode/index.js';
 import { projectLegacyState } from './legacy-projection.js';
+import { deriveNextExpectedActor } from './next-expected-actor.js';
 import {
   CURRENT_STATE_SCHEMA_VERSION,
   createDefaultStepRuntime,
   normalizeStepRuntime,
-  TERMINAL_STEP_STATUSES,
 } from './schema.js';
 
 function childDispatchDefaults(existing = {}) {
@@ -131,26 +131,27 @@ export function ensureGraphState(state) {
     childDispatchSessionIDs,
     graphRuntimeRollout,
   });
-  const closureStepId = 'acceptance-closure:acceptance-manager';
-  const closurePending = Boolean(graph.steps?.[closureStepId])
-    && !TERMINAL_STEP_STATUSES.has(stepRuntime[closureStepId]?.status || 'pending');
+  const nextExpectedActor = deriveNextExpectedActor({
+    ...state,
+    compat: undefined,
+    nextExpectedActor: undefined,
+    graph,
+    stepRuntime,
+    activeDispatch: projected.activeDispatch,
+    pendingManagers: projected.pendingManagers,
+    pendingCapabilityHands: projected.pendingCapabilityHands,
+    pendingProbes: projected.pendingProbes,
+  });
 
   const compat = {
     activeDispatch: projected.activeDispatch,
     pendingManagers: projected.pendingManagers,
     pendingCapabilityHands: projected.pendingCapabilityHands,
     pendingProbes: projected.pendingProbes,
-    nextExpectedActor: state.blocked
-      ? 'none'
-      : projected.pendingManagers[0]
-        || projected.pendingCapabilityHands[0]
-        || projected.pendingProbes[0]
-        || (closurePending ? 'acceptance-manager' : 'none'),
+    nextExpectedActor,
     deferredDispatchState: projected.deferredDispatchState,
     childDispatchSessionIDs,
   };
-
-  const nextExpectedActor = compat.nextExpectedActor;
 
   const activeStepIds = Object.entries(stepRuntime)
     .filter(([, runtime]) => ['dispatching', 'in_progress', 'waiting'].includes(runtime.status))

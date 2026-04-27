@@ -6,6 +6,7 @@ export {
 } from './schema.js';
 export { loadPluginState, savePluginState } from './storage.js';
 export { ensureGraphState, migratePluginState } from './migration.js';
+export { deriveNextExpectedActor } from './next-expected-actor.js';
 export {
   buildRouteFileContract,
   detectCompletedDeliverables,

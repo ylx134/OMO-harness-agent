@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { deriveNextExpectedActor } from './next-expected-actor.js';
 import { TERMINAL_STEP_STATUSES } from './schema.js';
 
 function stepStatus(state, stepId) {
@@ -60,12 +61,13 @@ export function projectLegacyState(state) {
   const deferredDispatchState = state?.deferredDispatchState
     || (activeEntry ? deferredDispatchStateForStep(activeEntry[1].kind) : (state?.currentPhase === 'complete' ? 'complete' : 'ready'));
 
-  const nextExpectedActor = state?.nextExpectedActor
-    || activeDispatch?.actor
-    || pendingManagers[0]
-    || pendingCapabilityHands[0]
-    || pendingProbes[0]
-    || (isPendingLike(state, 'acceptance-closure:acceptance-manager') ? 'acceptance-manager' : 'none');
+  const nextExpectedActor = deriveNextExpectedActor({
+    ...state,
+    activeDispatch,
+    pendingManagers,
+    pendingCapabilityHands,
+    pendingProbes,
+  });
 
   return {
     pendingManagers,

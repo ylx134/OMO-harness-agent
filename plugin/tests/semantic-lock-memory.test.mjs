@@ -65,6 +65,8 @@ test('intake bootstraps root memory helpers and writes populated task semantics'
   assert.match(task, /## Semantic Lock/);
   assert.match(task, /## What Counts As Done/);
   assert.match(task, /## Non-Degradable Requirements Summary/);
+  assert.match(task, /default mode may auto-dispatch the first legal actor after intake/i);
+  assert.doesNotMatch(task, /No manager, hand, or probe progression happens here/);
   assert.doesNotMatch(task, /\{Describe the final goal in one sentence\}/);
   assert.doesNotMatch(task, /\{What the user truly means by success/);
 

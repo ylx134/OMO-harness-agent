@@ -17,7 +17,6 @@ CONFIG_FILE="${OPENCODE_CONFIG_FILE:-$HOME/.config/opencode/oh-my-opencode.json}
 OPENCODE_MAIN_CONFIG_FILE="${OPENCODE_MAIN_CONFIG_FILE:-$HOME/.config/opencode/opencode.json}"
 OPENCODE_CONFIG_DIR="$(dirname "$OPENCODE_MAIN_CONFIG_FILE")"
 OMO_AGENT_CONFIG_FILE="${OMO_AGENT_CONFIG_FILE:-$HOME/.config/opencode/oh-my-openagent.json}"
-INSTALL_STATE_FILE="${OPENCODE_CONFIG_DIR}/.omo-harness-install-state.json"
 
 SKILLS=(
   "control"
@@ -45,6 +44,8 @@ HOOKS=(
   "summary-sync-guard.js"
   "probe-evidence-guard.js"
   "managed-route-completeness-guard.js"
+  "schema-guard.js"
+  "summary-supervision-guard.js"
 )
 
 HARNESS_AGENT_FILES=(
@@ -59,30 +60,6 @@ HARNESS_AGENT_FILES=(
 echo -e "${GREEN}🚀 Installing OMO Harness Skills managed-agents integration...${NC}"
 
 mkdir -p "$SKILLS_DIR" "$AGENTS_DIR" "$HOOKS_DIR" "$OPENCODE_CONFIG_DIR" "$(dirname "$CONFIG_FILE")"
-
-python3 - "$INSTALL_STATE_FILE" "$OPENCODE_MAIN_CONFIG_FILE" "$CONFIG_FILE" "$OMO_AGENT_CONFIG_FILE" <<'PY'
-import json
-import os
-import sys
-
-snapshot_path, *tracked_paths = sys.argv[1:]
-
-if os.path.exists(snapshot_path):
-    raise SystemExit(0)
-
-snapshot = {"version": 1, "files": {}}
-for tracked_path in tracked_paths:
-    if os.path.exists(tracked_path):
-        with open(tracked_path) as f:
-            snapshot["files"][tracked_path] = {"exists": True, "content": f.read()}
-    else:
-        snapshot["files"][tracked_path] = {"exists": False, "content": None}
-
-os.makedirs(os.path.dirname(snapshot_path), exist_ok=True)
-with open(snapshot_path, 'w') as f:
-    json.dump(snapshot, f, indent=2)
-    f.write('\n')
-PY
 
 if [ -d "$PLUGIN_DIR" ]; then
   echo -e "  ✅ plugin source present: $PLUGIN_DIR"
@@ -149,8 +126,6 @@ with open(new_path) as f:
     new_cfg = json.load(f)
 
 config.setdefault('categories', {}).update(new_cfg.get('categories', {}))
-if 'model_fallback' in new_cfg:
-    config['model_fallback'] = new_cfg['model_fallback']
 config.setdefault('experimental', {}).update(new_cfg.get('experimental', {}))
 
 if 'hooks' in new_cfg:
@@ -218,4 +193,23 @@ else
   echo -e "  ${YELLOW}⚠️  oh-my-openagent.harness.json not found, skipped harness-agent merge${NC}"
 fi
 
+# ── Harness Observability CLI ──────────────────────────────────────
+HCTL_DST="${HOME}/.local/bin/hctl"
+mkdir -p "$(dirname "$HCTL_DST")"
+ln -sfn "$SOURCE_DIR/scripts/harness" "$HCTL_DST"
+echo -e "  ✅ linked observability CLI: hctl → $HCTL_DST"
+
+# ── Harness Launcher ──────────────────────────────────────────────
+HARNESS_LAUNCHER_DST="${HOME}/.local/bin/harness"
+ln -sfn "$SOURCE_DIR/scripts/harness-launcher" "$HARNESS_LAUNCHER_DST"
+echo -e "  ✅ linked harness launcher: harness → $HARNESS_LAUNCHER_DST"
+
+# ── Schema files ──────────────────────────────────────────────────
+if [ -d "$SOURCE_DIR/hooks/schemas" ]; then
+  ln -sfn "$SOURCE_DIR/hooks/schemas" "$HOOKS_DIR/schemas"
+  echo -e "  ✅ linked schema definitions: hooks/schemas/"
+fi
+
 echo -e "${GREEN}🎉 Installation complete. Restart OpenCode/OMO to load the new managed-agents skills, hooks, and harness agents.${NC}"
+echo -e "${GREEN}   Launch:  harness .          (start harness mode)${NC}"
+echo -e "${GREEN}   Monitor: hctl status        (inspect runtime state)${NC}"
