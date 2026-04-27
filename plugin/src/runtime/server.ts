@@ -1735,6 +1735,10 @@ export const server = async (input) => {
           finalizeDeferredAcceptance,
           options: { forceDispatch: true },
         });
+        output.parts = [{
+          type: 'text',
+          text: `Harness route ${state.routeId} advanced. Current phase: ${state.currentPhase}. Next expected actor: ${state.nextExpectedActor}.`,
+        }];
         return;
       }
 
@@ -1771,6 +1775,14 @@ export const server = async (input) => {
           options: { forceDispatch: true },
         });
       }
+
+      // Block the LLM from processing this command — plugin owns intake
+      output.parts = [{
+        type: 'text',
+        text: newState.blocked
+          ? `Harness intake blocked: ${newState.blockedReason || 'clarification required'}`
+          : `Harness intake initialized for ${newState.routeId}. Next expected actor: ${newState.nextExpectedActor}.`,
+      }];
     },
     "chat.message": async (hookInput, output) => {
       const { state } = await loadPluginState(workspace);
