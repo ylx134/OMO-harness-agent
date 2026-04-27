@@ -16,6 +16,8 @@ OMO Harness Agent 将 OpenCode 从"一个 prompt 一个响应"的工作流转变
 
 ## 快速开始
 
+**前置条件：** 已安装 [OpenCode](https://opencode.ai)，Node.js 18+。
+
 ### 1. 安装
 
 ```bash
@@ -24,11 +26,15 @@ cd OMO-harness-agent
 ./setup.sh
 ```
 
-### 2. 启动
+只需这一条命令。`setup.sh` 会自动构建插件、创建隔离的 harness 配置目录、链接所有 skills/hooks/agents、安装 `harness` 启动器和 `hctl` 命令行工具。
+
+### 2. 启动 harness 模式
 
 ```bash
 harness .
 ```
+
+这会启动 OpenCode 并只加载 harness 插件。OMO 保持独立——用普通的 `opencode` 命令即可进入 Sisyphus 模式。
 
 ### 3. 执行路线
 
@@ -36,13 +42,14 @@ harness .
 /control 修复构建报错并补上回归验证
 ```
 
-插件会拦截 `/control`，将任务分类到合适的路线（F-M1 / C-M1 / A-M1 / P-H1），写入持久化状态，然后按顺序调度 管理者 → 执行手 → 探针。
+插件会拦截命令，将任务分类到合适的路线，写入持久化状态到 `.agent-memory/`，然后按顺序调度管理者 → 执行手 → 探针。
 
 ### 4. 观察运行时
 
 ```bash
-hctl status      # 完整运行时面板
-hctl blockers    # 当前阻塞项
+# 在另一个终端
+hctl status      # 路线、阶段、活跃 actor
+hctl blockers    # 阻塞项
 hctl summary     # 一行摘要
 ```
 

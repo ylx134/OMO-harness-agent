@@ -210,6 +210,40 @@ if [ -d "$SOURCE_DIR/hooks/schemas" ]; then
   echo -e "  ✅ linked schema definitions: hooks/schemas/"
 fi
 
-echo -e "${GREEN}🎉 Installation complete. Restart OpenCode/OMO to load the new managed-agents skills, hooks, and harness agents.${NC}"
+# ── Harness-pure isolated profile (harness command uses this) ─────
+HARNESS_PURE_DIR="${HOME}/.config/opencode-profiles/harness-pure/opencode"
+mkdir -p "$HARNESS_PURE_DIR/skills" "$HARNESS_PURE_DIR/hooks" "$HARNESS_PURE_DIR/agents/agent"
+
+# Write clean opencode.json with only harness plugin
+python3 - "$HARNESS_PURE_DIR/opencode.json" "$SOURCE_DIR" <<'PY'
+import json, sys
+config_path, source_dir = sys.argv[1:3]
+data = {"$schema": "https://opencode.ai/config.json", "plugin": [source_dir + "/plugin"]}
+with open(config_path, 'w') as f:
+    json.dump(data, f, indent=2)
+    f.write('\n')
+print(f'  ✅ wrote harness-pure opencode.json')
+PY
+
+# Symlink skills into harness-pure
+for skill in "${SKILLS[@]}"; do
+  ln -sfn "$SOURCE_DIR/$skill" "$HARNESS_PURE_DIR/skills/$skill" 2>/dev/null || true
+done
+echo -e "  ✅ linked ${#SKILLS[@]} skills into harness-pure"
+
+# Symlink hooks into harness-pure
+for hook in "${HOOKS[@]}"; do
+  ln -sfn "$SOURCE_DIR/hooks/$hook" "$HARNESS_PURE_DIR/hooks/$hook" 2>/dev/null || true
+done
+ln -sfn "$SOURCE_DIR/hooks/schemas" "$HARNESS_PURE_DIR/hooks/schemas" 2>/dev/null || true
+echo -e "  ✅ linked hooks into harness-pure"
+
+# Symlink agent files into harness-pure
+for agent_file in "${HARNESS_AGENT_FILES[@]}"; do
+  ln -sfn "$SOURCE_DIR/agents/agent/$agent_file" "$HARNESS_PURE_DIR/agents/agent/$agent_file" 2>/dev/null || true
+done
+echo -e "  ✅ linked agent files into harness-pure"
+
+echo -e "${GREEN}🎉 Installation complete.${NC}"
 echo -e "${GREEN}   Launch:  harness .          (start harness mode)${NC}"
 echo -e "${GREEN}   Monitor: hctl status        (inspect runtime state)${NC}"

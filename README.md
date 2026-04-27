@@ -16,6 +16,8 @@ OMO Harness Agent turns OpenCode from a prompt-only workflow into a managed, rou
 
 ## Quick start
 
+**Prerequisites:** [OpenCode](https://opencode.ai) installed, Node.js 18+.
+
 ### 1. Install
 
 ```bash
@@ -24,11 +26,15 @@ cd OMO-harness-agent
 ./setup.sh
 ```
 
-### 2. Launch
+That's it. `setup.sh` builds the plugin, creates the isolated harness profile, symlinks all skills/hooks/agents, and installs the `harness` launcher and `hctl` CLI.
+
+### 2. Launch harness mode
 
 ```bash
 harness .
 ```
+
+This opens OpenCode with only the harness plugin loaded. OMO stays completely separate — use plain `opencode` for normal Sisyphus work.
 
 ### 3. Run a route
 
@@ -36,14 +42,15 @@ harness .
 /control 修复构建报错并补上回归验证
 ```
 
-The plugin intercepts `/control`, classifies the task into a route (F-M1 / C-M1 / A-M1 / P-H1), writes durable state, and dispatches managers → hands → probes in order.
+The plugin intercepts the command, classifies the task into a route, writes durable state to `.agent-memory/`, and dispatches managers → hands → probes in sequence.
 
-### 4. Observe
+### 4. Observe the runtime
 
 ```bash
-hctl status      # full runtime panel
-hctl blockers    # what's blocking progress
-hctl summary     # one-line shell prompt
+# In another terminal
+hctl status      # route, phase, active actors
+hctl blockers    # what's blocking
+hctl summary     # one-liner
 ```
 
 ---

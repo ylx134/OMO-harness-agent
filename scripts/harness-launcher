@@ -6,7 +6,7 @@
 #   harness --agent ... .  → custom agent
 
 set -euo pipefail
-export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config/opencode-profiles/harness-pure}"
+export XDG_CONFIG_HOME="$HOME/.config/opencode-profiles/harness-pure"
 
 AGENT="${HARNESS_AGENT:-harness-orchestrator}"
 
