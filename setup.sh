@@ -229,7 +229,7 @@ PY
 # Local plugin entry (OpenCode auto-discovers .js files in plugins/ directory)
 cat > "$HARNESS_PURE_DIR/plugins/harness-plugin.js" << PLUGINEOF
 import { server } from "${SOURCE_DIR}/plugin/dist/index.js"
-export default server
+export { server }
 PLUGINEOF
 echo -e "  ✅ created harness plugin entry: plugins/harness-plugin.js"
 
