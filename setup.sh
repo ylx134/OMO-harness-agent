@@ -17,6 +17,7 @@ CONFIG_FILE="${OPENCODE_CONFIG_FILE:-$HOME/.config/opencode/oh-my-opencode.json}
 OPENCODE_MAIN_CONFIG_FILE="${OPENCODE_MAIN_CONFIG_FILE:-$HOME/.config/opencode/opencode.json}"
 OPENCODE_CONFIG_DIR="$(dirname "$OPENCODE_MAIN_CONFIG_FILE")"
 OMO_AGENT_CONFIG_FILE="${OMO_AGENT_CONFIG_FILE:-$HOME/.config/opencode/oh-my-openagent.json}"
+HARNESS_PURE_DIR="${HOME}/.config/opencode-profiles/harness-pure/opencode"
 
 SKILLS=(
   "control"
@@ -46,7 +47,11 @@ HOOKS=(
   "managed-route-completeness-guard.js"
   "schema-guard.js"
   "summary-supervision-guard.js"
+)
+
+DEPRECATED_HOOKS=(
   "command-interceptor.js"
+  "require-subagent-dispatch.js"
 )
 
 HARNESS_AGENT_FILES=(
@@ -60,7 +65,23 @@ HARNESS_AGENT_FILES=(
 
 echo -e "${GREEN}🚀 Installing OMO Harness Skills managed-agents integration...${NC}"
 
-mkdir -p "$SKILLS_DIR" "$AGENTS_DIR" "$HOOKS_DIR" "$OPENCODE_CONFIG_DIR" "$(dirname "$CONFIG_FILE")"
+mkdir -p "$SKILLS_DIR" "$AGENTS_DIR" "$HOOKS_DIR" "$OPENCODE_CONFIG_DIR" "$(dirname "$CONFIG_FILE")" "$HARNESS_PURE_DIR/hooks"
+
+for hook in "${DEPRECATED_HOOKS[@]}"; do
+  target="$HOOKS_DIR/$hook"
+  if [ -L "$target" ]; then
+    rm "$target"
+    echo -e "  ✅ removed deprecated hook link: $hook"
+  fi
+done
+
+for hook in "${DEPRECATED_HOOKS[@]}"; do
+  target="$HARNESS_PURE_DIR/hooks/$hook"
+  if [ -L "$target" ]; then
+    rm "$target"
+    echo -e "  ✅ removed deprecated harness-pure hook link: $hook"
+  fi
+done
 
 if [ -d "$PLUGIN_DIR" ]; then
   echo -e "  ✅ plugin source present: $PLUGIN_DIR"
@@ -69,14 +90,6 @@ if [ -d "$PLUGIN_DIR" ]; then
     exit 1
   }
   echo -e "  ✅ built local plugin package: omo-harness-plugin"
-  (
-    cd "$OPENCODE_CONFIG_DIR"
-    npm install --no-save "$PLUGIN_DIR" >/dev/null 2>&1 || {
-      echo -e "  ${RED}❌ failed to install local plugin package from $PLUGIN_DIR${NC}"
-      exit 1
-    }
-  )
-  echo -e "  ✅ installed local plugin package: omo-harness-plugin"
 else
   echo -e "  ${RED}❌ plugin directory missing: $PLUGIN_DIR${NC}"
   exit 1
@@ -212,7 +225,6 @@ if [ -d "$SOURCE_DIR/hooks/schemas" ]; then
 fi
 
 # ── Harness-pure isolated profile (harness command uses this) ─────
-HARNESS_PURE_DIR="${HOME}/.config/opencode-profiles/harness-pure/opencode"
 mkdir -p "$HARNESS_PURE_DIR/skills" "$HARNESS_PURE_DIR/hooks" "$HARNESS_PURE_DIR/agents/agent" "$HARNESS_PURE_DIR/plugins"
 
 # Write opencode.json: OMO for task() engine, harness plugin loaded from plugins/ directory

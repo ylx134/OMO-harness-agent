@@ -44,7 +44,11 @@ HOOKS=(
   "managed-route-completeness-guard.js"
   "schema-guard.js"
   "summary-supervision-guard.js"
+)
+
+DEPRECATED_HOOKS=(
   "command-interceptor.js"
+  "require-subagent-dispatch.js"
 )
 
 HARNESS_AGENT_FILES=(
@@ -82,6 +86,16 @@ for hook in "${HOOKS[@]}"; do
   fi
 done
 
+for hook in "${DEPRECATED_HOOKS[@]}"; do
+  target="$HOOKS_DIR/$hook"
+  if [ -L "$target" ]; then
+    rm "$target"
+    echo -e "  ✅ removed deprecated hook link: $hook"
+  elif [ -f "$target" ]; then
+    echo -e "  ${YELLOW}⚠️  deprecated hook $hook is not a symlink, skipped${NC}"
+  fi
+done
+
 for agent_file in "${HARNESS_AGENT_FILES[@]}"; do
   target="$AGENTS_DIR/$agent_file"
   if [ -L "$target" ]; then
@@ -93,14 +107,6 @@ for agent_file in "${HARNESS_AGENT_FILES[@]}"; do
     echo -e "  ${YELLOW}⚠️  harness agent file not found, skipped: $agent_file${NC}"
   fi
 done
-
-if [ -d "$PLUGIN_DIR" ]; then
-  (
-    cd "$OPENCODE_CONFIG_DIR"
-    npm uninstall omo-harness-plugin >/dev/null 2>&1 || true
-  )
-  echo -e "  ✅ removed local plugin package: omo-harness-plugin"
-fi
 
 if [ -f "$CONFIG_FILE" ] && [ -f "$SOURCE_DIR/oh-my-opencode.json" ]; then
   python3 - "$CONFIG_FILE" "$SOURCE_DIR/oh-my-opencode.json" <<'PY'
