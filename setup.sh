@@ -213,18 +213,25 @@ fi
 
 # ── Harness-pure isolated profile (harness command uses this) ─────
 HARNESS_PURE_DIR="${HOME}/.config/opencode-profiles/harness-pure/opencode"
-mkdir -p "$HARNESS_PURE_DIR/skills" "$HARNESS_PURE_DIR/hooks" "$HARNESS_PURE_DIR/agents/agent"
+mkdir -p "$HARNESS_PURE_DIR/skills" "$HARNESS_PURE_DIR/hooks" "$HARNESS_PURE_DIR/agents/agent" "$HARNESS_PURE_DIR/plugins"
 
-# Write clean opencode.json with only harness plugin
-python3 - "$HARNESS_PURE_DIR/opencode.json" "$SOURCE_DIR" <<'PY'
+# Write opencode.json: OMO for task() engine, harness plugin loaded from plugins/ directory
+python3 - "$HARNESS_PURE_DIR/opencode.json" <<'PY'
 import json, sys
-config_path, source_dir = sys.argv[1:3]
-data = {"$schema": "https://opencode.ai/config.json", "plugin": [source_dir + "/plugin"]}
+config_path = sys.argv[1]
+data = {"$schema": "https://opencode.ai/config.json", "plugin": ["oh-my-openagent@latest"]}
 with open(config_path, 'w') as f:
     json.dump(data, f, indent=2)
     f.write('\n')
 print(f'  ✅ wrote harness-pure opencode.json')
 PY
+
+# Local plugin entry (OpenCode auto-discovers .js files in plugins/ directory)
+cat > "$HARNESS_PURE_DIR/plugins/harness-plugin.js" << PLUGINEOF
+import { server } from "${SOURCE_DIR}/plugin/dist/index.js"
+export default server
+PLUGINEOF
+echo -e "  ✅ created harness plugin entry: plugins/harness-plugin.js"
 
 # Symlink skills into harness-pure
 for skill in "${SKILLS[@]}"; do
