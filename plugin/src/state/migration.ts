@@ -171,6 +171,7 @@ export function ensureGraphState(state) {
     blockedStepIds: state.blockedStepIds || [],
     retryQueue: state.retryQueue || [],
     heldLocks: state.heldLocks || {},
+    fileWriteLocks: state.fileWriteLocks || {},
     graphRuntimeRollout,
     childDispatchSessionIDs,
     compat,

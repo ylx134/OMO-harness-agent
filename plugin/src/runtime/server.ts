@@ -934,6 +934,139 @@ function activeDispatchMatches(state, agent, sessionID = '') {
   return true;
 }
 
+const FILE_WRITE_LOCK_LIVE_STATUSES = new Set(['dispatching', 'in_progress', 'waiting']);
+
+function isGovernedWritePath(filePath = '') {
+  const normalized = String(filePath || '').replace(/\\/g, '/');
+  return (
+    normalized.includes('/.agent-memory/')
+    || normalized.includes('.agent-memory/')
+    || normalized.includes('/evidence/')
+    || normalized.startsWith('evidence/')
+  );
+}
+
+function normalizeFileWriteLockPath(workspace, filePath = '') {
+  if (!filePath) return '';
+  const absolute = path.isAbsolute(filePath) ? filePath : path.join(workspace, filePath);
+  return path.normalize(absolute);
+}
+
+function isLiveStep(state, stepId) {
+  return FILE_WRITE_LOCK_LIVE_STATUSES.has(state?.stepRuntime?.[stepId]?.status || '');
+}
+
+function liveStepIdsForFileLocks(state) {
+  return new Set(Object.keys(state?.stepRuntime || {}).filter((stepId) => isLiveStep(state, stepId)));
+}
+
+function pruneFileWriteLocks(state) {
+  const liveStepIds = liveStepIdsForFileLocks(state);
+  const nextLocks = {};
+  for (const [filePath, lock] of Object.entries(state?.fileWriteLocks || {})) {
+    if (lock?.stepId && liveStepIds.has(lock.stepId)) {
+      nextLocks[filePath] = lock;
+    }
+  }
+  return nextLocks;
+}
+
+function findLiveStepForActor(state, actor, sessionID = '') {
+  const stepIds = [
+    ...(state?.activeStepIds || []),
+    ...Object.keys(state?.stepRuntime || {}),
+  ];
+  for (const stepId of Array.from(new Set(stepIds))) {
+    if (!isLiveStep(state, stepId)) continue;
+    const step = state?.graph?.steps?.[stepId];
+    if (step?.actor !== actor) continue;
+    const activeSessionID = state?.stepRuntime?.[stepId]?.activeSessionID || '';
+    if (sessionID && activeSessionID && sessionID !== activeSessionID) continue;
+    return { stepId, phase: step.kind, sessionID: activeSessionID };
+  }
+  return null;
+}
+
+function buildFileWriteLockBlock(actor, filePath, existingLock) {
+  return [
+    'File write lock blocked this write.',
+    `Actor: ${actor}`,
+    `File: ${filePath}`,
+    `Current holder: ${existingLock.actor} (${existingLock.stepId})`,
+    '',
+    'This file is already owned by another live child step.',
+    'Recovery:',
+    '1. Write a different evidence file, or',
+    '2. Send a HARNESS_HANDOFF event with your contribution, or',
+    '3. Wait until the current holder completes.',
+  ].join('\n');
+}
+
+function extractPatchFilePaths(patchText = '') {
+  const paths = [];
+  for (const line of String(patchText || '').split(/\r?\n/)) {
+    const match = line.match(/^\*\*\* (?:Add|Update|Delete) File: (.+)$/);
+    if (match?.[1]) paths.push(match[1].trim());
+  }
+  return paths;
+}
+
+function extractWriteTargetPaths(toolName = '', toolArgs = {}) {
+  const targets = [];
+  const addTarget = (value) => {
+    if (Array.isArray(value)) {
+      value.forEach(addTarget);
+      return;
+    }
+    if (value) targets.push(String(value));
+  };
+
+  addTarget(toolArgs.file_path || toolArgs.path);
+  for (const edit of toolArgs.edits || []) {
+    addTarget(edit?.file_path || edit?.path);
+  }
+
+  if (['apply_patch', 'patch'].includes(toolName)) {
+    targets.push(...extractPatchFilePaths(toolArgs.patch || toolArgs.content || toolArgs.input || ''));
+  }
+
+  return Array.from(new Set(targets.filter(Boolean)));
+}
+
+async function guardAndAcquireFileWriteLock(workspace, state, actor, sessionID, filePath, content = '') {
+  if (!state?.mode || state.mode !== 'harness') return state;
+  if (!actor || !isGovernedWritePath(filePath)) return state;
+  if (String(content || '').includes('PHASE_GUARD_BYPASS')) return state;
+
+  const lockPath = normalizeFileWriteLockPath(workspace, filePath);
+  if (!lockPath) return state;
+
+  const currentStep = findLiveStepForActor(state, actor, sessionID);
+  if (!currentStep) return state;
+
+  const locks = pruneFileWriteLocks(state);
+  const existingLock = locks[lockPath];
+  if (existingLock && existingLock.stepId !== currentStep.stepId) {
+    throw new Error(buildFileWriteLockBlock(actor, lockPath, existingLock));
+  }
+
+  const nextState = {
+    ...state,
+    fileWriteLocks: {
+      ...locks,
+      [lockPath]: {
+        actor,
+        stepId: currentStep.stepId,
+        phase: currentStep.phase,
+        sessionID: currentStep.sessionID || sessionID || '',
+        acquiredAt: existingLock?.acquiredAt || nowIso(),
+      },
+    },
+  };
+  await savePluginState(workspace, nextState);
+  return nextState;
+}
+
 function completedManagerPhase(managerName) {
   if (managerName === 'execution-manager') return 'execution';
   if (managerName === 'acceptance-manager') return 'acceptance';
@@ -949,10 +1082,14 @@ function withoutFirst(values, target) {
 }
 
 async function persistDeferredState(workspace, state) {
-  await savePluginState(workspace, state);
+  const nextState = {
+    ...state,
+    fileWriteLocks: pruneFileWriteLocks(state),
+  };
+  await savePluginState(workspace, nextState);
   await syncManagedAgentIndex(workspace);
   await syncStatusFromState(workspace);
-  return state;
+  return nextState;
 }
 
 async function managerArtifactCompletionReady(workspace, state, actor) {
@@ -2030,7 +2167,7 @@ export const server = async (input) => {
       output.system.unshift(...buildSystemAdditions(agent, state));
     },
     "tool.execute.before": async (hookInput, output) => {
-      const { state } = await loadPluginState(workspace);
+      let { state } = await loadPluginState(workspace);
       const toolArgs = {
         ...(hookInput?.args || {}),
         ...(output?.args || {}),
@@ -2046,17 +2183,29 @@ export const server = async (input) => {
 
       // ── Phase-Actor File Write Authorization (#1) ──────────────────
       const toolName = lower(hookInput.tool);
-      if ((toolName === 'edit' || toolName === 'write') && state?.mode === 'harness' && currentAgent) {
-        const targetPath = toolArgs.file_path || toolArgs.path || '';
+      if (['edit', 'write', 'multi_edit', 'apply_patch', 'patch'].includes(toolName) && state?.mode === 'harness' && currentAgent) {
+        const targetPaths = extractWriteTargetPaths(toolName, toolArgs);
         const content = toolArgs.content || toolArgs.new_string || '';
-        const blockReason = guardFileWrite(currentAgent, targetPath, content, state);
-        if (blockReason) {
-          await appendPluginDebug(workspace, 'phase-guard.blocked', {
-            actor: currentAgent,
-            file: targetPath,
-            reason: blockReason.slice(0, 200),
-          });
-          throw new Error(blockReason);
+        for (const targetPath of targetPaths) {
+          const blockReason = guardFileWrite(currentAgent, targetPath, content, state);
+          if (blockReason) {
+            await appendPluginDebug(workspace, 'phase-guard.blocked', {
+              actor: currentAgent,
+              file: targetPath,
+              reason: blockReason.slice(0, 200),
+            });
+            throw new Error(blockReason);
+          }
+          try {
+            state = await guardAndAcquireFileWriteLock(workspace, state, currentAgent, hookInput.sessionID || toolArgs.sessionID || '', targetPath, content);
+          } catch (error) {
+            await appendPluginDebug(workspace, 'file-write-lock.blocked', {
+              actor: currentAgent,
+              file: targetPath,
+              reason: String(error?.message || error).slice(0, 200),
+            });
+            throw error;
+          }
         }
       }
       // ── End Phase-Actor Guard ──────────────────────────────────────

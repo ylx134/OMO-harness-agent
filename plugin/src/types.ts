@@ -45,9 +45,17 @@ export interface GraphStateLike {
   pendingCapabilityHands?: string[];
   pendingProbes?: string[];
   activeDispatch?: { actor?: string | null } | null;
+  fileWriteLocks?: Record<string, {
+    actor: string;
+    stepId: string;
+    phase: string;
+    sessionID?: string;
+    acquiredAt?: string;
+  }>;
   signals?: Record<string, unknown>;
   progressSignals?: StandardSignalEvent[];
   handoffSignals?: StandardSignalEvent[];
+  completionSignals?: StandardSignalEvent[];
 }
 
 export interface RouteConfigShape {
