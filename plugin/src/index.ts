@@ -14,6 +14,7 @@ export { recoverGraphRuntimeState, recordStepRetryableError, stepIdForActorPhase
 export { loadPluginState, savePluginState } from './state/storage.js';
 export { ensureGraphState, migratePluginState } from './state/migration.js';
 export { projectLegacyState } from './state/legacy-projection.js';
+export { classifyTask } from './runtime/server.js';
 export {
   buildManagedAgentIndexProjection,
   buildRoutePacketProjection,

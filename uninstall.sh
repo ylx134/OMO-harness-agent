@@ -44,6 +44,7 @@ HOOKS=(
   "managed-route-completeness-guard.js"
   "schema-guard.js"
   "summary-supervision-guard.js"
+  "require-subagent-dispatch.js"
 )
 
 HARNESS_AGENT_FILES=(

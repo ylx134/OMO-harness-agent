@@ -104,7 +104,7 @@ async function appendText(p, text) {
   await fs.appendFile(p, text, 'utf8');
 }
 
-function classifyTask(message) {
+export function classifyTask(message) {
   const msg = lower(message);
   if (["fix", "bug", "修复", "报错", "回归"].some(k => msg.includes(k))) return "F-M1";
   if (["product", "从零", "搭建", "build a", "create a", "产品"].some(k => msg.includes(k))) return "P-H1";
