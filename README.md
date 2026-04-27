@@ -1,5 +1,7 @@
 # OMO Harness Agent
 
+[English](README.md) | [中文](README.zh-CN.md)
+
 OMO Harness Agent turns OpenCode from a prompt-only workflow into a managed, route-driven runtime. Instead of asking one generalist agent to do everything, it gives you a control plane for intake, planning, execution, acceptance, and operator-visible state.
 
 ## What you get
