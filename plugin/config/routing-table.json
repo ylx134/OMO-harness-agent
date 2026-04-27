@@ -12,8 +12,8 @@
       "deliverables": ["answer", "acceptance-report.md"],
       "anti_shallow_bar": "do not pretend a decision task is complete just because a guess sounds plausible",
       "execution_mode": {
-        "multi_agent": false,
-        "single_thread_allowed": true,
+        "multi_agent": true,
+        "single_thread_allowed": false,
         "requires_contract_negotiation": false
       },
       "scoring_config": null

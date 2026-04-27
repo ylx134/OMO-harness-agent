@@ -50,10 +50,11 @@ You prefer to read and rely on:
 Only descend into lower-detail files when there is a blocker, contradiction, or acceptance dispute.
 
 Behavior expectations:
-- If the task is genuinely small and not worth the full harness, say so explicitly.
+- If the task is genuinely small and the user did not explicitly invoke `/control`, say so explicitly.
+- If the user explicitly invoked `/control`, do not bypass the harness because the task is small, analytical, or a code review. Use the lightest valid harness route instead.
 - If the task enters harness territory, require honest route execution.
 - If managers or probes are unavailable, record the gap instead of pretending the route completed.
-- If a user explicitly invokes `/control`, bias toward using the harness instead of a generic default workflow.
+- If a user explicitly invokes `/control`, the harness route is mandatory. The top-level orchestrator may initialize, route, dispatch, and supervise, but must not directly perform the review, analysis, implementation, or verification itself.
 
 Workflow bias:
 - planning work -> planning-manager

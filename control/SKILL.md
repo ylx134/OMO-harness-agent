@@ -17,6 +17,8 @@ Agent prompts are defined in `agents/` (planner.md, executor.md, checker.md) and
 
 **CRITICAL**: Before doing anything, Control MUST run the Task Router Gate to decide whether to use the full harness or delegate to Sisyphus directly.
 
+Hard precedence rule: if the user explicitly invoked `/control`, route to Control. Do not downgrade the request to direct Sisyphus execution because it is a review, explanation, small change, or otherwise lightweight. A lightweight `/control` request still belongs to the harness; it should use the lightest harness route, normally `J-L1` through `acceptance-manager`.
+
 ### Step 1: Classify the Request
 
 Evaluate the user's request against these criteria:
@@ -32,7 +34,7 @@ Evaluate the user's request against these criteria:
 
 ### Step 2: Decision Rules
 
-**Route to Sisyphus (direct execution, no harness) when ANY of these are true:**
+**Route to Sisyphus (direct execution, no harness) when ANY of these are true, unless the user explicitly invoked `/control`:**
 - Request is purely informational ("explain X", "what does Y do")
 - Request is a single-line change ("add console.log", "change config value")
 - Request is a code review ("look at this code, any issues?")
@@ -59,6 +61,7 @@ Evaluate the user's request against these criteria:
 **If routed to Control:**
 - Proceed with the full harness workflow (Semantic Lock Gate → Task Typing → Auto-Pilot or manual rounds)
 - If the request was borderline and user didn't explicitly request harness, briefly explain why: "This involves 3+ files and quality-critical changes — using the full harness for planning, execution, and independent acceptance."
+- If the request is a code review, explanation, comparison, or other `判断型` task, do not perform the analysis in the top-level orchestrator. Route it as `J-L1` and dispatch `acceptance-manager`.
 
 ## Semantic Lock Gate
 
@@ -107,7 +110,7 @@ After task type is chosen, assign a flow tier:
 
 | Task Type | Default Route |
 |-----------|---------------|
-| `判断型` | `check` or direct analysis |
+| `判断型` | `check` through `acceptance-manager` when inside `/control`; direct analysis only when not inside `/control` |
 | `修复型` | `drive` + `check` |
 | `改造型` | `plan` if needed, then `drive` + `check` |
 | `能力型` | `capability-planner` + `plan` + `drive` + `check` |
@@ -189,7 +192,7 @@ Single-thread role-playing is only allowed in `降级模式`, and only when suba
 
 **Degraded Mode Workflow**:
 1. Control reads `config/routing-table.json`, checks `execution_mode.single_thread_allowed` for the selected route
-2. If `single_thread_allowed: false` (e.g., P-H1): warn user that product-type tasks require multi-agent mode, offer to downgrade to `改造型` route
+2. If `single_thread_allowed: false`: treat missing subagent dispatch as a route-blocking gap. For product-type routes, offer a downgrade only if the user accepts a smaller goal. For explicit `/control` review routes, do not downgrade to main-thread analysis.
 3. If `single_thread_allowed: true`: proceed with sequential role execution
 4. Execute roles in order: planner phase → executor phase → checker phase
 5. Between role switches, explicitly write a role-transition marker to `orchestration-status.md`
@@ -452,7 +455,7 @@ Auto-pilot stops and escalates to user when:
 
 | Task Type | Default Flow Tier | Default Route |
 |-----------|-------------------|---------------|
-| `判断型` | 轻流程 | check / direct analysis |
+| `判断型` | 轻流程 | check through `acceptance-manager` when inside `/control`; direct analysis only when not inside `/control` |
 | `修复型` | 中流程 | drive + check |
 | `改造型` | 中流程 | plan if needed + drive + check |
 | `能力型` | 中流程 | capability-planner + plan + drive + check |

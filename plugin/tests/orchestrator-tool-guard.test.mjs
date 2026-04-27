@@ -27,6 +27,30 @@ async function setupPlanningState() {
   return { workspace, hooks };
 }
 
+async function setupReviewState() {
+  const workspace = await mkdtemp(path.join(os.tmpdir(), 'harness-review-guard-'));
+  let childCount = 0;
+  const prompts = [];
+  const hooks = await server({
+    directory: workspace,
+    client: { session: {
+      create: async () => ({ data: { id: `review_child_${++childCount}` } }),
+      promptAsync: async (body) => {
+        prompts.push(body);
+      },
+    } },
+    worktree: '/',
+    serverUrl: new URL('http://127.0.0.1:4117/'),
+  });
+
+  await hooks['command.execute.before'](
+    { command: 'control', arguments: '帮我做一次代码 review，看看这些改动有没有问题', sessionID: 'ses_review' },
+    { parts: [] },
+  );
+
+  return { workspace, hooks, prompts };
+}
+
 test('top-level harness-orchestrator tool calls stay blocked after deferred manager progression starts', async () => {
   const { workspace, hooks } = await setupPlanningState();
 
@@ -40,6 +64,25 @@ test('top-level harness-orchestrator tool calls stay blocked after deferred mana
 
   const debug = await readFile(path.join(workspace, '.agent-memory', 'harness-plugin-debug.log'), 'utf8');
   assert.match(debug, /tool\.blocked\.while_deferred_route_active/);
+
+  await rm(workspace, { recursive: true, force: true });
+});
+
+test('/control code review dispatches acceptance-manager instead of allowing top-level review work', async () => {
+  const { workspace, hooks, prompts } = await setupReviewState();
+  const state = JSON.parse(await readFile(path.join(workspace, '.agent-memory', 'harness-plugin-state.json'), 'utf8'));
+
+  assert.equal(state.routeId, 'J-L1');
+  assert.equal(state.activeDispatch?.actor, 'acceptance-manager');
+  assert.ok(prompts.some((body) => JSON.stringify(body).includes('acceptance-manager')));
+
+  await assert.rejects(
+    () => hooks['tool.execute.before'](
+      { tool: 'read', sessionID: 'ses_review' },
+      { args: { path: '/tmp/example.txt' } },
+    ),
+    /top-level harness-orchestrator must not continue tool work while the deferred route is active/,
+  );
 
   await rm(workspace, { recursive: true, force: true });
 });
