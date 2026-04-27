@@ -219,7 +219,7 @@ mkdir -p "$HARNESS_PURE_DIR/skills" "$HARNESS_PURE_DIR/hooks" "$HARNESS_PURE_DIR
 python3 - "$HARNESS_PURE_DIR/opencode.json" <<'PY'
 import json, sys
 config_path = sys.argv[1]
-data = {"$schema": "https://opencode.ai/config.json", "plugin": ["oh-my-openagent@latest"]}
+data = {"$schema": "https://opencode.ai/config.json", "plugin": []}
 with open(config_path, 'w') as f:
     json.dump(data, f, indent=2)
     f.write('\n')
