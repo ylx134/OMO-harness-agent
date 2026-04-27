@@ -25,10 +25,12 @@ async function setupHarnessWithBlockingDispatch() {
   const workspace = await mkdtemp(path.join(os.tmpdir(), 'harness-dispatch-lock-'));
   const gate = deferred();
   const dispatched = [];
+  let childCount = 0;
   const hooks = await server({
     directory: workspace,
     client: {
       session: {
+        create: async () => ({ data: { id: `child_${++childCount}` } }),
         promptAsync: async (payload) => {
           dispatched.push(inferActorFromPrompt(payload.body.parts?.[0]?.text || ''));
           await gate.promise;

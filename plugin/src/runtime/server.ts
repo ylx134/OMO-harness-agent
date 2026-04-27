@@ -704,6 +704,21 @@ async function guardInactiveChildActor(workspace, hookInput, currentAgent) {
   throw new Error('Harness plugin blocked this action: only a live deferred child actor may continue tool work.');
 }
 
+async function guardUnknownToolDuringActiveHarnessRoute(workspace, hookInput, currentAgent) {
+  const { state } = await loadPluginState(workspace);
+  if (!state?.mode || state.mode !== 'harness') return;
+  if (state.currentPhase === 'complete' || state.currentPhase === 'blocked') return;
+  if (!currentAgent || isHarnessAgent(currentAgent)) return;
+
+  await appendPluginDebug(workspace, 'tool.blocked.unknown_actor_while_route_active', {
+    agent: currentAgent,
+    sessionID: chatMessageSessionID(hookInput),
+    routeId: state.routeId,
+    currentPhase: state.currentPhase,
+  });
+  throw new Error('Harness plugin blocked this action: active harness routes only allow the top-level orchestrator or live dispatched child actors to use tools.');
+}
+
 async function appendEvent(workspace, event, payload = {}) {
   await appendText(path.join(workspace, '.agent-memory', 'activity.jsonl'), JSON.stringify({ event, ts: nowIso(), ...payload }) + '\n');
 }
@@ -714,7 +729,7 @@ async function appendPluginDebug(workspace, label, payload = {}) {
 
 async function createChildDispatchSession(client, workspace, state, actor, phase) {
   if (!client?.session?.create) {
-    return { sessionID: state.sessionID, created: false };
+    throw new Error(`child session creation is unavailable for ${actor}; concrete harness work must run in a subagent`);
   }
   const response = await client.session.create({
     query: { directory: workspace },
@@ -1818,7 +1833,16 @@ export const server = async (input) => {
         return;
       }
       if (agent === 'harness-orchestrator') {
-        await appendPluginDebug(workspace, 'hook.chat.message.orchestrator_ignored', { reason: 'top-level task init is command-only' });
+        output.parts = [{
+          type: 'text',
+          text: `Harness route ${state.routeId} is active. Top-level harness-orchestrator is supervising only; concrete work belongs to ${state.nextExpectedActor || state.activeDispatch?.actor || 'the dispatched subagent'}.`,
+        }];
+        await appendPluginDebug(workspace, 'hook.chat.message.orchestrator_short_circuited_active_route', {
+          reason: 'top-level concrete work blocked while route is active',
+          routeId: state.routeId,
+          currentPhase: state.currentPhase,
+          nextExpectedActor: state.nextExpectedActor || '',
+        });
         return;
       }
       if (isSyntheticHarnessExpansionMessage(message)) {
@@ -1838,18 +1862,22 @@ export const server = async (input) => {
     },
     "tool.execute.before": async (hookInput, output) => {
       const { state } = await loadPluginState(workspace);
-      const currentAgent = logicalActorForInput(state, hookInput) || hookInput.args?.agent || hookInput.args?.subagent_type || '';
+      const toolArgs = {
+        ...(hookInput?.args || {}),
+        ...(output?.args || {}),
+      };
+      const currentAgent = logicalActorForInput(state, hookInput) || toolArgs.agent || toolArgs.subagent_type || '';
       const activeAgent = currentAgent || state?.activeAgent || '';
-      await appendPluginDebug(workspace, 'hook.tool.before', { tool: hookInput.tool, activeAgent, argsKeys: output.args ? Object.keys(output.args) : [] });
+      await appendPluginDebug(workspace, 'hook.tool.before', { tool: hookInput.tool, activeAgent, argsKeys: Object.keys(toolArgs) });
+      await guardUnknownToolDuringActiveHarnessRoute(workspace, hookInput, currentAgent);
       await guardInactiveChildActor(workspace, hookInput, currentAgent);
-      await requireHarnessManagerDispatch(workspace, hookInput.tool, output.args, activeAgent);
-      await guardExecutionManager(workspace, hookInput.tool, output.args, activeAgent);
-      await guardAcceptanceManager(workspace, hookInput.tool, output.args, activeAgent);
+      await requireHarnessManagerDispatch(workspace, hookInput.tool, toolArgs, activeAgent);
+      await guardExecutionManager(workspace, hookInput.tool, toolArgs, activeAgent);
+      await guardAcceptanceManager(workspace, hookInput.tool, toolArgs, activeAgent);
 
       // ── Phase-Actor File Write Authorization (#1) ──────────────────
       const toolName = lower(hookInput.tool);
       if ((toolName === 'edit' || toolName === 'write') && state?.mode === 'harness' && currentAgent) {
-        const toolArgs = output?.args || hookInput?.args || {};
         const targetPath = toolArgs.file_path || toolArgs.path || '';
         const content = toolArgs.content || toolArgs.new_string || '';
         const blockReason = guardFileWrite(currentAgent, targetPath, content, state);
@@ -1865,11 +1893,11 @@ export const server = async (input) => {
       // ── End Phase-Actor Guard ──────────────────────────────────────
 
       if (lower(hookInput.tool) === 'task') {
-        await recordDispatch(workspace, output.args);
+        await recordDispatch(workspace, toolArgs);
         await syncManagedAgentIndex(workspace);
         await syncStatusFromState(workspace);
-        await appendEvent(workspace, 'actor.dispatched', { tool: hookInput.tool, args: output.args });
-        await appendPluginDebug(workspace, 'dispatch.recorded', inferRoleFromTaskArgs(output.args));
+        await appendEvent(workspace, 'actor.dispatched', { tool: hookInput.tool, args: toolArgs });
+        await appendPluginDebug(workspace, 'dispatch.recorded', inferRoleFromTaskArgs(toolArgs));
       }
     },
     "tool.execute.after": async (hookInput, output) => {

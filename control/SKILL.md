@@ -1,13 +1,13 @@
 ---
 name: control
-description: Use when a long-running or multi-phase project should be handled from one main thread while planning, execution, memory, and acceptance are coordinated through shared files and fresh subagents. Supports AUTO-PILOT MODE for fully autonomous execution. Includes a Task Router Gate that automatically decides whether to use Control or delegate to Sisyphus directly.
+description: Use when a long-running or multi-phase project should be supervised from one top-level thread while planning, execution, memory, and acceptance are delegated to fresh subagents through shared files. Supports AUTO-PILOT MODE for fully autonomous execution. Includes a Task Router Gate that automatically decides whether to use Control or delegate to Sisyphus directly.
 ---
 
 # Control
 
 ## Overview
 
-Run a long project from one main thread. The user should not have to manually coordinate planner, executor, and checker threads.
+Run a long project from one supervising thread. The user should not have to manually coordinate planner, executor, and checker threads, and the supervising thread should not do their concrete work.
 
 This skill is the conductor that coordinates all other skills to achieve complete autonomous execution.
 
@@ -159,52 +159,13 @@ When you catch yourself using these phrases:
 
 ## Required Role Split
 
-**CRITICAL**: For any long-running, multi-phase, or auto-pilot run, control MUST launch independent subagents for these three roles:
+**CRITICAL**: In `/control` mode, control MUST launch independent subagents for every concrete role. The top-level `harness-orchestrator` owns only route intake, global supervision, and blocking decisions.
 
 - `规划代理`: owns product expansion and whole-task planning
 - `执行代理`: owns the current round's implementation and execution writeback
 - `验收代理`: owns contract review and acceptance decisions
 
-Single-thread role-playing is only allowed in `降级模式`, and only when subagent launch failed or the user explicitly asked to avoid subagents. If `降级模式` is used, record it in `.agent-memory/orchestration-status.md` and tell the user.
-
-### Degraded Mode (降级模式)
-
-**Purpose**: Allow the harness to work in environments where `task()` is unavailable (e.g., vanilla Claude Code, Codex, non-OMO setups).
-
-**Activation**: Degraded mode activates automatically when ANY of these are true:
-- `task()` call fails or is unavailable
-- User explicitly requests single-thread mode
-- Environment detection shows non-OMO platform
-
-**Behavioral Differences in Degraded Mode**:
-
-| Aspect | Multi-Agent Mode | Degraded Mode |
-|--------|-----------------|---------------|
-| Role execution | Separate subagents | Same agent plays all roles sequentially |
-| Contract negotiation | Executor↔Checker turn-taking | Skipped (same agent writes and reviews) |
-| Parallel execution | Possible | Not possible |
-| orchestration-status.md | Full (agent IDs, Expected Next Writer) | Simplified (current role, current phase only) |
-| File ownership | Enforced per-agent | Self-enforced per-role-phase |
-| State management | Unchanged | Unchanged |
-| Scoring framework | Unchanged | Unchanged |
-| Quality guardrails | Unchanged | Unchanged |
-| Git checkpoint | Unchanged | Unchanged |
-
-**Degraded Mode Workflow**:
-1. Control reads `config/routing-table.json`, checks `execution_mode.single_thread_allowed` for the selected route
-2. If `single_thread_allowed: false`: treat missing subagent dispatch as a route-blocking gap. For product-type routes, offer a downgrade only if the user accepts a smaller goal. For explicit `/control` review routes, do not downgrade to main-thread analysis.
-3. If `single_thread_allowed: true`: proceed with sequential role execution
-4. Execute roles in order: planner phase → executor phase → checker phase
-5. Between role switches, explicitly write a role-transition marker to `orchestration-status.md`
-6. Self-assessment replaces contract negotiation: executor writes contract, immediately reviews it against the task.md criteria before proceeding
-
-**Recording**:
-```
-## Execution Mode
-Mode: 降级模式 (single-thread)
-Reason: task() unavailable | user requested | non-OMO environment
-Activated: {timestamp}
-```
+If subagent launch fails or is unavailable, the route must block honestly. Do not role-play planner, executor, capability hands, or checker in the main thread. Do not convert missing subagents into a simplified local execution path.
 
 ### Multi-Agent Coordination
 

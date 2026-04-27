@@ -130,37 +130,28 @@ Before marking a contract as ready-for-review, it must contain:
 If no progress on contract negotiation for 15 minutes, control escalates to user.
 See `error-handling.json → contract_negotiation` for configuration.
 
-## Degraded Mode Coordination
+## Missing Subagent Policy
 
-When running in `降级模式` (single-thread), the coordination rules are simplified:
+When a required manager, capability hand, or probe cannot be dispatched, the route must block. Do not switch to single-thread role execution.
 
 ### What Changes
-- **No parallel execution**: All roles execute sequentially in one thread
-- **No Expected Next Writer check**: The single agent transitions between roles explicitly
-- **Contract negotiation skipped**: Agent writes contract and self-reviews against task.md criteria
-- **File ownership self-enforced**: Agent respects role boundaries by phase, not by agent ID
+- **No local role-play**: one agent must not sequentially act as planner, executor, hand, and checker.
+- **No skipped negotiation**: missing manager or checker turns are route-blocking gaps.
+- **No self-acceptance**: execution output cannot be accepted by the same thread that produced it.
+- **No hidden fallback**: state must record the missing actor and stop concrete work.
 
 ### What Stays the Same
-- **File roles**: Each file still has a defined purpose and budget
-- **Append-only rules**: `activity.jsonl` and `journal.md` remain append-only
-- **State machine phases**: planning → execution → acceptance → decision flow is preserved
-- **Git checkpoint discipline**: Commits at round boundaries still required
+- **File roles**: Each file still has a defined purpose and budget.
+- **Append-only rules**: `activity.jsonl` and `journal.md` remain append-only.
+- **State machine phases**: planning → execution → acceptance → decision flow is preserved only when the required actors are real dispatched children.
+- **Git checkpoint discipline**: Commits at round boundaries still required.
 
-### Degraded Mode State Machine
+### Blocked State Marker
+Missing subagent dispatch must be recorded in `orchestration-status.md`:
 ```
-planning → execution → self-acceptance → decision
-    ↑                                       ↓
-    └──────── retry (if self-rejected) ─────┘
+## Execution Mode
+Mode: blocked
+Missing Actor: {manager|hand|probe}
+Blocked At: {timestamp}
+Reason: required subagent dispatch failed or is unavailable
 ```
-
-### Role Transition Markers
-When switching roles in degraded mode, write a transition marker to `orchestration-status.md`:
-```
-## Role Transition
-Previous Role: executor
-Current Role: checker
-Phase: acceptance
-Timestamp: {ISO-8601}
-Reason: round implementation complete, entering self-acceptance
-```
-

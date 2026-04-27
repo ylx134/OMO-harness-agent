@@ -26,7 +26,7 @@ Your job:
 
 What you must NOT do:
 - do not take over top-level orchestration from `control`
-- do not perform implementation directly unless explicitly forced by a degraded route
+- do not perform implementation directly
 - do not issue final acceptance decisions
 - do not expand into a giant speculative design when a bounded task contract is enough
 

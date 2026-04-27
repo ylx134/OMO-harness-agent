@@ -23,6 +23,27 @@ async function setupIntake(commandText = '修复构建报错并补上回归验�
   return { workspace, hooks };
 }
 
+async function setupActiveRoute(commandText = '修复构建报错并补上回归验证') {
+  const workspace = await mkdtemp(path.join(os.tmpdir(), 'harness-active-response-'));
+  let childCount = 0;
+  const hooks = await server({
+    directory: workspace,
+    client: { session: {
+      create: async () => ({ data: { id: `child_${++childCount}` } }),
+      promptAsync: async () => {},
+    } },
+    worktree: '/',
+    serverUrl: new URL('http://127.0.0.1:4116/'),
+  });
+
+  await hooks['command.execute.before'](
+    { command: 'control', arguments: commandText, sessionID: 'ses_active' },
+    { parts: [] },
+  );
+
+  return { workspace, hooks };
+}
+
 test('chat.message short-circuits harness-orchestrator into deterministic intake summary', async () => {
   const { workspace, hooks } = await setupIntake();
   const output = {
@@ -70,6 +91,32 @@ test('chat.message still short-circuits intake summary when the host agent is ge
       text: 'Harness intake initialized for F-M1. Next expected actor: planning-manager. Route packet written to .agent-memory/route-packet.json.',
     },
   ]);
+
+  await rm(workspace, { recursive: true, force: true });
+});
+
+test('chat.message short-circuits top-level output while a deferred route is active', async () => {
+  const { workspace, hooks } = await setupActiveRoute();
+  const output = {
+    parts: [
+      { type: 'text', text: 'I will inspect the files directly and complete the review myself.' },
+    ],
+  };
+
+  await hooks['chat.message'](
+    { agent: 'harness-orchestrator', sessionID: 'ses_active' },
+    output,
+  );
+
+  assert.deepEqual(output.parts, [
+    {
+      type: 'text',
+      text: 'Harness route F-M1 is active. Top-level harness-orchestrator is supervising only; concrete work belongs to planning-manager.',
+    },
+  ]);
+
+  const debug = await readFile(path.join(workspace, '.agent-memory', 'harness-plugin-debug.log'), 'utf8');
+  assert.match(debug, /hook\.chat\.message\.orchestrator_short_circuited_active_route/);
 
   await rm(workspace, { recursive: true, force: true });
 });

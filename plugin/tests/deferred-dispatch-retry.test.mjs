@@ -14,10 +14,12 @@ function inferActorFromPrompt(text = '') {
 async function createHooks({ failAgents = new Set(), commandText = '修复构建报错并补上回归验证' } = {}) {
   const workspace = await mkdtemp(path.join(os.tmpdir(), 'harness-retry-'));
   const dispatched = [];
+  let childCount = 0;
   const hooks = await server({
     directory: workspace,
     client: {
       session: {
+        create: async () => ({ data: { id: `child_${++childCount}` } }),
         promptAsync: async (payload) => {
           const agent = inferActorFromPrompt(payload.body.parts?.[0]?.text || '');
           dispatched.push(agent);

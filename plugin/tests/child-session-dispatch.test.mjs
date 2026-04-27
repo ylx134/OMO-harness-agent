@@ -56,3 +56,39 @@ test('deferred manager dispatch uses child sessions instead of parent session fo
 
   await rm(workspace, { recursive: true, force: true });
 });
+
+test('missing child session creation blocks instead of dispatching concrete work to the parent session', async () => {
+  const workspace = await mkdtemp(path.join(os.tmpdir(), 'harness-no-child-session-'));
+  const promptedSessions = [];
+  const hooks = await server({
+    directory: workspace,
+    client: {
+      session: {
+        promptAsync: async (payload) => {
+          promptedSessions.push(payload);
+        },
+      },
+    },
+    worktree: '/',
+    serverUrl: new URL('http://127.0.0.1:4123/'),
+  });
+
+  await hooks['command.execute.before'](
+    { command: 'control', arguments: '修复构建报错并补上回归验证 --manual', sessionID: 'parent_ses' },
+    { parts: [] },
+  );
+
+  await hooks['command.execute.before'](
+    { command: 'plan', arguments: '继续推进当前 Harness 路由', sessionID: 'parent_ses' },
+    { parts: [] },
+  );
+
+  assert.deepEqual(promptedSessions, []);
+
+  const state = JSON.parse(await readFile(path.join(workspace, '.agent-memory', 'harness-plugin-state.json'), 'utf8'));
+  assert.equal(state.deferredDispatchState, 'retryable_error');
+  assert.equal(state.activeDispatch, null);
+  assert.match(state.lastDispatchError?.message || '', /child session creation is unavailable/);
+
+  await rm(workspace, { recursive: true, force: true });
+});

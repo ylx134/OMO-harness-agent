@@ -87,6 +87,23 @@ test('/control code review dispatches acceptance-manager instead of allowing top
   await rm(workspace, { recursive: true, force: true });
 });
 
+test('unknown default agent cannot use tools while a harness route is active', async () => {
+  const { workspace, hooks } = await setupPlanningState();
+
+  await assert.rejects(
+    () => hooks['tool.execute.before'](
+      { tool: 'read', agent: 'default-agent' },
+      { args: { path: '/tmp/example.txt' } },
+    ),
+    /active harness routes only allow the top-level orchestrator or live dispatched child actors to use tools/,
+  );
+
+  const debug = await readFile(path.join(workspace, '.agent-memory', 'harness-plugin-debug.log'), 'utf8');
+  assert.match(debug, /tool\.blocked\.unknown_actor_while_route_active/);
+
+  await rm(workspace, { recursive: true, force: true });
+});
+
 test('child manager tool calls are not mistaken for top-level harness-orchestrator work during an active route', async () => {
   const { workspace, hooks } = await setupPlanningState();
 
@@ -97,6 +114,34 @@ test('child manager tool calls are not mistaken for top-level harness-orchestrat
 
   const debug = await readFile(path.join(workspace, '.agent-memory', 'harness-plugin-debug.log'), 'utf8');
   assert.doesNotMatch(debug, /tool\.blocked\.while_deferred_route_active/);
+
+  await rm(workspace, { recursive: true, force: true });
+});
+
+test('execution-manager guard reads tool args from hookInput when output args are absent', async () => {
+  const { workspace, hooks } = await setupPlanningState();
+  let state = JSON.parse(await readFile(path.join(workspace, '.agent-memory', 'harness-plugin-state.json'), 'utf8'));
+
+  await hooks['chat.message'](
+    { agent: 'planning-manager', sessionID: state.activeDispatch.sessionID },
+    { parts: [{ type: 'text', text: 'planning manager finished the route contract' }] },
+  );
+
+  state = JSON.parse(await readFile(path.join(workspace, '.agent-memory', 'harness-plugin-state.json'), 'utf8'));
+  assert.equal(state.activeDispatch?.actor, 'execution-manager');
+
+  await assert.rejects(
+    () => hooks['tool.execute.before'](
+      {
+        tool: 'task',
+        agent: 'execution-manager',
+        sessionID: state.activeDispatch.sessionID,
+        args: { subagent_type: 'planning-manager', prompt: 'recurse into planning-manager' },
+      },
+      {},
+    ),
+    /Execution-manager must dispatch capability agents/,
+  );
 
   await rm(workspace, { recursive: true, force: true });
 });
