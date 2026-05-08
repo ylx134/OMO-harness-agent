@@ -425,41 +425,75 @@ function actorForSession(state, sessionID = '') {
   return '';
 }
 
+function buildDispatchBlock(state = null) {
+  const actor = state?.nextExpectedActor;
+  if (!actor || actor === 'none' || actor === 'harness-orchestrator') return [];
+
+  const isPendingManager = (state?.pendingManagers || []).includes(actor);
+  if (!isPendingManager) return [];
+
+  const skills = MANAGER_SKILLS[actor] || [];
+  const description = `Harness dispatch: ${actor} role`;
+  const prompt = buildManagerDispatchPromptInline(actor, state);
+
+  return [
+    `DISPATCH NOW: ${actor} has not been dispatched yet.`,
+    `You MUST call task() with these EXACT parameters:`,
+    '',
+    `task(subagent_type="general",`,
+    `     description="${description}",`,
+    `     run_in_background=true,`,
+    `     load_skills=["${skills.join('", "')}"],`,
+    `     prompt="${prompt}")`,
+    '',
+    `AFTER calling task(): your turn is OVER. The subagent will complete the ${actor} role.`,
+    `Do NOT call any other tools after task().`,
+  ];
+}
+
+function buildManagerDispatchPromptInline(managerName, state) {
+  const skills = MANAGER_SKILLS[managerName] || [];
+  return `You are being dispatched as ${managerName}. `
+    + `Route: ${state?.routeId || 'unknown'}. Task: ${state?.rawUserInput || 'see .agent-memory/task.md'}. `
+    + `Skill stack: ${skills.join(', ') || 'none'}. `
+    + `Read .agent-memory/task.md and .agent-memory/orchestration-status.md first, `
+    + `then write the manager contract files. `
+    + `When done, end your response with: HARNESS_COMPLETE {"status":"done","summary":"${managerName} completed their work"}`;
+}
+
 function buildSystemAdditions(agent, state = null) {
   if (agent === "harness-orchestrator") {
     if (state?.blocked) {
       return [
         "[harness-mode] HARNESS ROUTE IS BLOCKED.",
         `Reason: ${state.blockedReason || 'unknown'}`,
-        "Do not perform any tool work, implementation, or analysis while blocked.",
-        "Wait for the operator to resolve the block and re-dispatch.",
       ];
     }
     if (state?.deferredDispatchState === 'retryable_error') {
       return [
         "[harness-mode] HARNESS ROUTE IS IN RETRYABLE ERROR.",
         `Last error: ${state.lastDispatchError?.message || 'unknown'}`,
-        "Do not read source files, write code, or explore the codebase.",
-        "Wait for the operator to retry or unblock.",
       ];
     }
     const intakeOnlyLines = state?.currentPhase === 'intake'
       ? [
           'The Harness plugin has already completed intake and written the route packet.',
-          'Do not call tools, subagents, skills, or background agents from this top-level orchestrator turn.',
-          'Do not continue generic analyze-mode exploration after intake is written.',
-          'Respond briefly that Harness intake is initialized and the next expected actor is the recorded manager, then stop.',
+          'Your ONLY job now: read .agent-memory/task.md and .agent-memory/route-packet.json, then dispatch the actors below.',
+          'After you call task(), your turn is DONE. Do NOT implement, analyze, or explore code.',
         ]
       : [];
+
+    const dispatchBlock = buildDispatchBlock(state);
+
     return [
-      "[harness-mode] HARNESS MODE IS ACTIVE.",
-      "You must not complete tasks in one thread.",
-      "You must create a route packet, dispatch the full required manager stack, then supervise selected hands and probes by summary files.",
-      "Do not perform deep business analysis or command validation yourself before manager dispatch markers exist.",
-      "When delegated subagents complete their work, you MUST review results before acceptance: use record-review with accepted/request_changes/rejected.",
-      "Delegated actors cannot complete without your accepted review. Self-approval by top-level identity (main, harness-orchestrator, etc.) is rejected.",
+      "[harness-mode] HARNESS MODE IS ACTIVE. You are THE DISPATCHER ONLY.",
+      "You must NOT implement features, read business code, write code, or explore the codebase yourself.",
+      "You create a route packet, dispatch managers/hands/probes via task() calls, then supervise via summary files.",
+      "Delegated roles cannot complete without your accepted review after subagent returns.",
+      "Self-completion by top-level identity (main, harness-orchestrator, etc.) is blocked.",
       ...intakeOnlyLines,
-      "If required managers/hands/probes are unavailable, mark the route blocked honestly."
+      ...dispatchBlock,
+      "If the dispatch instruction above is empty, the route is blocked — report this to the user.",
     ];
   }
   if (agent === "feature-planner") {
@@ -719,6 +753,17 @@ async function requireHarnessManagerDispatch(workspace, tool, args, currentAgent
   const { state } = await loadPluginState(workspace);
   if (!state || currentAgent !== 'harness-orchestrator') return;
   const toolName = lower(tool);
+
+  if (toolName === 'task') {
+    const subagentType = String((args?.subagent_type || args?.agent) || '').toLowerCase();
+    const target = [...MANAGER_AGENTS, ...CAPABILITY_AGENTS, ...PROBE_AGENTS].find(a => subagentType.includes(a) || subagentType === 'general');
+    if (target) {
+      if (state.deferredDispatchState && (state.deferredDispatchState === 'idle' || state.deferredDispatchState === 'ready')) {
+        return;
+      }
+    }
+  }
+
   if (state.currentPhase === 'intake') {
     await appendPluginDebug(workspace, 'tool.blocked.during_intake', { tool: toolName, routeId: state.routeId, nextExpectedActor: state.nextExpectedActor });
     throw new Error('Harness plugin blocked this action: intake is already initialized; top-level harness-orchestrator must not continue tool work.');
@@ -727,9 +772,8 @@ async function requireHarnessManagerDispatch(workspace, tool, args, currentAgent
     await appendPluginDebug(workspace, 'tool.blocked.while_deferred_route_active', { tool: toolName, routeId: state.routeId, currentPhase: state.currentPhase, deferredDispatchState: state.deferredDispatchState });
     throw new Error('Harness plugin blocked this action: top-level harness-orchestrator must not continue tool work while the deferred route is active.');
   }
-  const safePreDispatchTools = new Set(['task']);
   const hasPlanning = state.dispatchedManagers.includes('planning-manager');
-  if (!hasPlanning && !safePreDispatchTools.has(toolName)) {
+  if (!hasPlanning && !MANAGER_AGENTS.has(toolName) && toolName !== 'task') {
     throw new Error('Harness plugin blocked this action: harness-orchestrator must dispatch planning-manager before performing substantive tool work.');
   }
 }
@@ -2277,6 +2321,15 @@ export const server = async (input) => {
       // ── End Phase-Actor Guard ──────────────────────────────────────
 
       if (lower(hookInput.tool) === 'task') {
+        const inferred = inferRoleFromTaskArgs(toolArgs);
+        if (inferred.foundManagers.length > 0) {
+          const { state } = await loadPluginState(workspace);
+          const manager = inferred.foundManagers[0];
+          const stepId = stepIdForActorPhase(state, manager, 'manager');
+          if (stepId) {
+            await beginDeferredDispatch(workspace, state, manager, 'manager');
+          }
+        }
         await recordDispatch(workspace, toolArgs);
         await syncManagedAgentIndex(workspace);
         await syncStatusFromState(workspace);
