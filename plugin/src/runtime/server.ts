@@ -426,6 +426,24 @@ function actorForSession(state, sessionID = '') {
 
 function buildSystemAdditions(agent, state = null) {
   if (agent === "harness-orchestrator") {
+    if (state?.blocked) {
+      return [
+        "[harness-mode] HARNESS ROUTE IS BLOCKED.",
+        `Reason: ${state.blockedReason || 'unknown'}`,
+        "The harness orchestrator must NOT perform any tool work, task implementation, or analysis work while the route is blocked.",
+        "Do not read code files, do not write code files, do not create new files, do not analyze implementations.",
+        "Wait for the operator to resolve the block and re-dispatch the route.",
+      ];
+    }
+    if (state?.deferredDispatchState === 'retryable_error') {
+      return [
+        "[harness-mode] HARNESS ROUTE IS IN RETRYABLE ERROR STATE.",
+        `Last error: ${state.lastDispatchError?.message || 'unknown'}`,
+        "The harness orchestrator must NOT perform any analysis, implementation, or additional subagent dispatch work while in retryable error state.",
+        "Do not read source files, do not write code, do not explore the codebase manually.",
+        "Wait for the operator to retry the dispatch or choose to unblock the route.",
+      ];
+    }
     const intakeOnlyLines = state?.currentPhase === 'intake'
       ? [
           'The Harness plugin has already completed intake and written the route packet.',
@@ -663,6 +681,31 @@ async function setBlocked(workspace, reason) {
   });
   await syncStatusFromState(workspace);
   await syncManagedAgentIndex(workspace);
+}
+
+async function guardOrchestratorTaskDispatch(workspace, hookInput, toolArgs, currentAgent) {
+  const { state } = await loadPluginState(workspace);
+  if (!state || currentAgent !== 'harness-orchestrator') return;
+  const toolName = lower(hookInput.tool);
+  if (toolName !== 'task') return;
+
+  const subagentType = String((toolArgs.subagent_type || hookInput.args?.subagent_type || toolArgs.agent) || '').toLowerCase();
+  if (!subagentType) return;
+
+  const allowedHarnessAgents = new Set([
+    ...HARNESS_AGENTS,
+    ...CAPABILITY_AGENTS,
+    ...PROBE_AGENTS,
+  ]);
+
+  if (!allowedHarnessAgents.has(subagentType)) {
+    await appendPluginDebug(workspace, 'tool.blocked.orchestrator_unauthorized_task', {
+      tool: toolName,
+      subagentType,
+      routeId: state.routeId,
+    });
+    throw new Error(`Harness plugin blocked this dispatch: harness-orchestrator may only dispatch known harness agents, not "${subagentType}".`);
+  }
 }
 
 async function requireHarnessManagerDispatch(workspace, tool, args, currentAgent) {
@@ -2177,6 +2220,7 @@ export const server = async (input) => {
       await appendPluginDebug(workspace, 'hook.tool.before', { tool: hookInput.tool, activeAgent, argsKeys: Object.keys(toolArgs) });
       await guardUnknownToolDuringActiveHarnessRoute(workspace, hookInput, currentAgent);
       await guardInactiveChildActor(workspace, hookInput, currentAgent);
+      await guardOrchestratorTaskDispatch(workspace, hookInput, toolArgs, activeAgent);
       await requireHarnessManagerDispatch(workspace, hookInput.tool, toolArgs, activeAgent);
       await guardExecutionManager(workspace, hookInput.tool, toolArgs, activeAgent);
       await guardAcceptanceManager(workspace, hookInput.tool, toolArgs, activeAgent);
