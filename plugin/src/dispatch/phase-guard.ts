@@ -105,6 +105,20 @@ const FILE_OWNERSHIP: Record<string, FileRule> = {
     owners: ['harness-orchestrator', 'planning-manager', 'execution-manager'],
     note: 'control owns overall structure',
   },
+  'latest-session.json': {
+    owners: ['harness-orchestrator'],
+    note: 'plugin-managed session pointer',
+  },
+
+  // ── Review files ──
+  'blocked.json': {
+    owners: ['harness-orchestrator'],
+    note: 'orchestrator records blocked review state',
+  },
+  'reviews.jsonl': {
+    owners: ['harness-orchestrator'],
+    note: 'append-only review log',
+  },
   'state-index.json': {
     owners: ['harness-orchestrator'],
     note: 'plugin-managed; agents must not write',

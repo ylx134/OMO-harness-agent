@@ -3,6 +3,7 @@
 import { createDefaultStepRuntime } from '../state/schema.js';
 import { recoverGraphRuntimeState } from './recovery.js';
 import { emitSignalsForStep } from './signals.js';
+import { actorRequiresDelegatedAgent } from './role-boundary.js';
 
 function nowIso() {
   return new Date().toISOString();

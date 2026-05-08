@@ -22,3 +22,8 @@ export {
 } from './observability/projections.js';
 
 export { default } from './runtime/server.js';
+
+export { actorRequiresDelegatedAgent, actorKind, validateCompletion } from './dispatch/role-boundary.js';
+export { SessionStore, createSession } from './state/session-store.js';
+export { loadBoard, createTask, getTaskById, getTaskByDir, updateTaskStatus, listTasks, createTaskId } from './state/task-board.js';
+export { redactSecrets, sanitizeEnv, safeEnv, redactPayload, redactState } from './dispatch/credential-boundary.js';

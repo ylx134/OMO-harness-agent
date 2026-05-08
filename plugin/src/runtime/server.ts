@@ -12,6 +12,7 @@ import { guardFileWrite } from '../dispatch/phase-guard.js';
 import { lazyProvisionIfNeeded } from '../dispatch/lazy-provision.js';
 import { applyStandardSignalEvents, parseStandardSignalEvents } from '../dispatch/standard-signals.js';
 import { createGraphRuntimeRollout, isManualHarnessMode, rolloutBudgetsForState } from '../mode/index.js';
+import { actorRequiresDelegatedAgent, actorKind, validateCompletion } from '../dispatch/role-boundary.js';
 import {
   buildManagedAgentIndexProjection,
   buildRoutePacketProjection,
@@ -430,18 +431,16 @@ function buildSystemAdditions(agent, state = null) {
       return [
         "[harness-mode] HARNESS ROUTE IS BLOCKED.",
         `Reason: ${state.blockedReason || 'unknown'}`,
-        "The harness orchestrator must NOT perform any tool work, task implementation, or analysis work while the route is blocked.",
-        "Do not read code files, do not write code files, do not create new files, do not analyze implementations.",
-        "Wait for the operator to resolve the block and re-dispatch the route.",
+        "Do not perform any tool work, implementation, or analysis while blocked.",
+        "Wait for the operator to resolve the block and re-dispatch.",
       ];
     }
     if (state?.deferredDispatchState === 'retryable_error') {
       return [
-        "[harness-mode] HARNESS ROUTE IS IN RETRYABLE ERROR STATE.",
+        "[harness-mode] HARNESS ROUTE IS IN RETRYABLE ERROR.",
         `Last error: ${state.lastDispatchError?.message || 'unknown'}`,
-        "The harness orchestrator must NOT perform any analysis, implementation, or additional subagent dispatch work while in retryable error state.",
-        "Do not read source files, do not write code, do not explore the codebase manually.",
-        "Wait for the operator to retry the dispatch or choose to unblock the route.",
+        "Do not read source files, write code, or explore the codebase.",
+        "Wait for the operator to retry or unblock.",
       ];
     }
     const intakeOnlyLines = state?.currentPhase === 'intake'
@@ -454,10 +453,11 @@ function buildSystemAdditions(agent, state = null) {
       : [];
     return [
       "[harness-mode] HARNESS MODE IS ACTIVE.",
-      "You are not in generic OMO analyze-mode even if other plugins inject their defaults.",
       "You must not complete tasks in one thread.",
       "You must create a route packet, dispatch the full required manager stack, then supervise selected hands and probes by summary files.",
       "Do not perform deep business analysis or command validation yourself before manager dispatch markers exist.",
+      "When delegated subagents complete their work, you MUST review results before acceptance: use record-review with accepted/request_changes/rejected.",
+      "Delegated actors cannot complete without your accepted review. Self-approval by top-level identity (main, harness-orchestrator, etc.) is rejected.",
       ...intakeOnlyLines,
       "If required managers/hands/probes are unavailable, mark the route blocked honestly."
     ];
@@ -518,6 +518,13 @@ async function initMemoryScaffold(workspace) {
     const f = path.join(memoryDir, jsonl);
     if (!(await exists(f))) await writeText(f, '');
   }
+
+  const reviewsDir = path.join(memoryDir, 'orchestrator-reviews');
+  const delegationsDir = path.join(memoryDir, 'delegations');
+  const sessionsDir = path.join(memoryDir, 'sessions');
+  await ensureDir(reviewsDir);
+  await ensureDir(delegationsDir);
+  await ensureDir(sessionsDir);
 
   const initScript = path.join(workspace, 'init.sh');
   if (!(await exists(initScript))) {
@@ -1884,6 +1891,21 @@ async function handleDeferredActorCompletion(client, workspace, state, hookInput
       stepId: authorization.stepId,
     });
     return state;
+  }
+
+  const actor = authorization.actor;
+  const kind = actorKind(actor);
+  if (actorRequiresDelegatedAgent(actor, kind)) {
+    const validation = validateCompletion(actor, agent, state.activeDispatch?.assignedAgentId);
+    if (!validation.ok) {
+      await appendPluginDebug(workspace, 'review.completion_blocked', {
+        actor,
+        reason: validation.reason,
+        completingAgent: agent,
+      });
+      await appendText(path.join(workspace, '.agent-memory', 'orchestrator-reviews', `${actor.replace(/[^a-zA-Z0-9_.:-]+/g, '_')}.blocked.json`), JSON.stringify({ actor, reason: validation.reason, ts: nowIso(), awaitingAcceptedReview: true }) + '\n');
+      return state;
+    }
   }
 
   return await reconcileHarnessRuntime({
