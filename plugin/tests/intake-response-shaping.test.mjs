@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -61,7 +61,7 @@ test('chat.message short-circuits harness-orchestrator into deterministic intake
   assert.deepEqual(output.parts, [
     {
       type: 'text',
-      text: 'Harness intake initialized for F-M1. Next expected actor: planning-manager. Route packet written to .agent-memory/route-packet.json.',
+      text: 'Harness intake initialized for F-M1. Next expected actor: planning-manager. Use /plan, /drive, /check to advance.',
     },
   ]);
 
@@ -88,18 +88,19 @@ test('chat.message still short-circuits intake summary when the host agent is ge
   assert.deepEqual(output.parts, [
     {
       type: 'text',
-      text: 'Harness intake initialized for F-M1. Next expected actor: planning-manager. Route packet written to .agent-memory/route-packet.json.',
+      text: 'Harness intake initialized for F-M1. Next expected actor: planning-manager. Use /plan, /drive, /check to advance.',
     },
   ]);
 
   await rm(workspace, { recursive: true, force: true });
 });
 
-test('chat.message short-circuits top-level output while a deferred route is active', async () => {
+test('chat.message allows orchestrator output through in auto mode when pending managers exist', async () => {
   const { workspace, hooks } = await setupActiveRoute();
+
   const output = {
     parts: [
-      { type: 'text', text: 'I will inspect the files directly and complete the review myself.' },
+      { type: 'text', text: 'I will now dispatch the next pending manager.' },
     ],
   };
 
@@ -108,15 +109,9 @@ test('chat.message short-circuits top-level output while a deferred route is act
     output,
   );
 
-  assert.deepEqual(output.parts, [
-    {
-      type: 'text',
-      text: 'Harness route F-M1 is active. Top-level harness-orchestrator is supervising only; concrete work belongs to planning-manager.',
-    },
-  ]);
-
-  const debug = await readFile(path.join(workspace, '.agent-memory', 'harness-plugin-debug.log'), 'utf8');
-  assert.match(debug, /hook\.chat\.message\.orchestrator_short_circuited_active_route/);
+  // In auto mode with pending managers, orchestrator output should NOT be replaced
+  assert.equal(output.parts[0].text, 'I will now dispatch the next pending manager.');
+  assert.equal(output.parts[0].type, 'text');
 
   await rm(workspace, { recursive: true, force: true });
 });

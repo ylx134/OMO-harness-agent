@@ -9,8 +9,8 @@ import { completeGraphStep } from '../dispatch/completion.js';
 import { reconcileRuntime } from '../dispatch/reconcile.js';
 import { markStepInProgress, recordStepRetryableError, stepIdForActorPhase } from '../dispatch/recovery.js';
 import { guardFileWrite } from '../dispatch/phase-guard.js';
-import { lazyProvisionIfNeeded } from '../dispatch/lazy-provision.js';
 import { applyStandardSignalEvents, parseStandardSignalEvents } from '../dispatch/standard-signals.js';
+import { selectCapabilityHands, selectProbes } from '../dispatch/capability-selector.js';
 import { createGraphRuntimeRollout, isManualHarnessMode, rolloutBudgetsForState } from '../mode/index.js';
 import { actorRequiresDelegatedAgent, actorKind, validateCompletion } from '../dispatch/role-boundary.js';
 import {
@@ -29,67 +29,19 @@ import {
 import { detectCompletedDeliverables } from '../state/file-contract.js';
 import { ensureGraphState } from '../state/migration.js';
 import { loadPluginState, savePluginState } from '../state/storage.js';
+import {
+  nowIso, requestId, lower, unique, includesAny, formatSection, formatSignalList,
+  normalizeCommandName, isHarnessCommand, completedManagerPhase, withoutFirst,
+  chatMessageSessionID, isSyntheticHarnessExpansionMessage, isSyntheticAutoDispatchEcho,
+  toolCountsAsChildProgress,
+} from './utils.js';
+import {
+  HARNESS_AGENTS, MANAGER_AGENTS, CAPABILITY_AGENTS, PROBE_AGENTS, MANAGER_SKILLS,
+} from './constants.js';
 
 export const id = "omo-harness-plugin";
 
-const HARNESS_AGENTS = new Set([
-  "harness-orchestrator",
-  "feature-planner",
-  "capability-planner",
-  "planning-manager",
-  "execution-manager",
-  "acceptance-manager",
-  "summary-manager",
-]);
-
-const MANAGER_AGENTS = new Set([
-  "feature-planner",
-  "capability-planner",
-  "planning-manager",
-  "execution-manager",
-  "acceptance-manager",
-  "summary-manager",
-]);
-
-const CAPABILITY_AGENTS = new Set([
-  "browser-agent",
-  "code-agent",
-  "shell-agent",
-  "docs-agent",
-  "evidence-agent",
-]);
-
-const PROBE_AGENTS = new Set([
-  "ui-probe-agent",
-  "api-probe-agent",
-  "regression-probe-agent",
-  "artifact-probe-agent",
-]);
-
-const MANAGER_SKILLS = {
-  "feature-planner": ["feature-planner", "plan"],
-  "capability-planner": ["capability-planner", "plan"],
-  "planning-manager": ["plan"],
-  "execution-manager": ["drive", "memory"],
-  "acceptance-manager": ["check"],
-  "summary-manager": ["memory"],
-};
-
 const AUTOPILOT_WATCHERS = new Map();
-
-function nowIso() {
-  return new Date().toISOString();
-}
-
-function requestId() {
-  const d = new Date();
-  const pad = (n) => String(n).padStart(2, "0");
-  return `REQ-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
-}
-
-function lower(s) {
-  return String(s || "").toLowerCase();
-}
 
 async function ensureDir(p) {
   await fs.mkdir(p, { recursive: true });
@@ -116,12 +68,6 @@ export function classifyTask(message) {
   if (["capability", "能力", "truly able", "deeper", "less visible"].some(k => msg.includes(k))) return "A-M1";
   if (["refactor", "重构", "改造", "rework"].some(k => msg.includes(k))) return "C-M1";
   return "J-L1";
-}
-
-function formatSection(items, fallback = 'none') {
-  const filtered = (items || []).filter(Boolean);
-  if (filtered.length === 0) return fallback;
-  return filtered.map((item) => `- ${item}`).join('\n');
 }
 
 function buildRouteDoneCriteria(route, semanticLockStatus) {
@@ -273,73 +219,8 @@ function buildRoutePacket(routeId, route, state) {
   });
 }
 
-function unique(values) {
-  return Array.from(new Set((values || []).filter(Boolean)));
-}
-
 function requiredManagersForRoute(route) {
   return unique([...(route?.managers || []), 'summary-manager']);
-}
-
-function includesAny(message, keywords) {
-  return keywords.some((keyword) => message.includes(keyword));
-}
-
-export function selectCapabilityHands(state) {
-  const routeId = state?.routeId || "J-L1";
-  const required = unique(state?.requiredCapabilityHands || routeConfig(routeId).capability);
-  const msg = lower(state?.rawUserInput || "");
-
-  if (required.length === 0) return [];
-
-  if (routeId === "P-H1" || routeId === "A-M1") return required;
-
-  if (routeId === "F-M1") {
-    const selected = ["shell-agent", "code-agent", "evidence-agent"].filter((name) => required.includes(name));
-    return selected.length ? selected : required;
-  }
-
-  if (routeId === "C-M1") {
-    const selected = ["docs-agent", "code-agent"];
-    if (includesAny(msg, ["build", "test", "运行", "启动", "compile", "编译", "migration", "migrate", "命令", "脚本", "api"])) {
-      selected.push("shell-agent");
-    }
-    selected.push("evidence-agent");
-    return unique(selected.filter((name) => required.includes(name)));
-  }
-
-  const selected = ["docs-agent"];
-  if (required.includes("evidence-agent") && includesAny(msg, ["evidence", "proof", "日志", "screenshot", "artifact", "依据", "证据", "输出"])) {
-    selected.push("evidence-agent");
-  }
-  for (const requiredHand of required) {
-    if (!selected.includes(requiredHand)) selected.push(requiredHand);
-  }
-  return unique(selected);
-}
-
-export function selectProbes(state) {
-  const routeId = state?.routeId || "J-L1";
-  const required = unique(state?.requiredProbes || routeConfig(routeId).probes);
-  const msg = lower(state?.rawUserInput || "");
-
-  if (routeId === "P-H1") {
-    return unique(["ui-probe-agent", "regression-probe-agent", "artifact-probe-agent"].filter((name) => required.includes(name)));
-  }
-  if (routeId === "A-M1") {
-    return unique(["api-probe-agent", "regression-probe-agent", "artifact-probe-agent"].filter((name) => required.includes(name)));
-  }
-  if (routeId === "F-M1") {
-    return unique(["regression-probe-agent", "artifact-probe-agent"].filter((name) => required.includes(name)));
-  }
-  if (routeId === "C-M1") {
-    const selected = ["regression-probe-agent", "artifact-probe-agent"];
-    if (includesAny(msg, ["api", "endpoint", "接口", "contract"]) && required.includes("api-probe-agent")) {
-      selected.unshift("api-probe-agent");
-    }
-    return unique(selected.filter((name) => required.includes(name)));
-  }
-  return required;
 }
 
 function determineActiveAgent(input) {
@@ -350,42 +231,12 @@ function isHarnessAgent(agent) {
   return HARNESS_AGENTS.has(agent) || CAPABILITY_AGENTS.has(agent) || PROBE_AGENTS.has(agent);
 }
 
-function normalizeCommandName(command) {
-  return String(command || '').replace(/^\//, '').trim();
-}
-
-function isHarnessCommand(command) {
-  return ['control', 'plan', 'drive', 'check'].includes(normalizeCommandName(command));
-}
-
 function routeIdForCommand(command, message = '') {
   const normalized = normalizeCommandName(command);
   if (normalized === 'plan') return 'C-M1';
   if (normalized === 'drive') return 'C-M1';
   if (normalized === 'check') return 'J-L1';
   return classifyTask(message);
-}
-
-function isSyntheticHarnessExpansionMessage(message) {
-  const msg = String(message || '');
-  return msg.includes('[analyze-mode]')
-    || msg.includes('<auto-slash-command>')
-    || msg.includes('# /control Command')
-    || msg.includes('MANDATORY delegate_task params')
-    || msg.includes('<system-reminder>')
-    || msg.includes('<!-- OMO_INTERNAL_INITIATOR -->')
-    || msg.includes('[BACKGROUND TASK COMPLETED]')
-    || msg.includes('[ALL BACKGROUND TASKS COMPLETE]');
-}
-
-function isSyntheticAutoDispatchEcho(message) {
-  const msg = String(message || '').trim();
-  return msg.startsWith('You are being auto-dispatched by the Harness plugin as ')
-    || msg.startsWith('You are being re-dispatched by the Harness plugin as acceptance-manager for final closure.');
-}
-
-function chatMessageSessionID(input) {
-  return input?.sessionID || input?.sessionId || input?.body?.sessionID || input?.path?.id || '';
 }
 
 function logicalActorForSession(state, sessionID = '') {
@@ -483,7 +334,7 @@ function buildSystemAdditions(agent, state = null) {
         ]
       : [];
 
-    const dispatchBlock = buildDispatchBlock(state);
+    const dispatchBlock = state?.autopilotEnabled ? buildDispatchBlock(state) : [];
 
     return [
       "[harness-mode] HARNESS MODE IS ACTIVE. You are THE DISPATCHER ONLY.",
@@ -730,13 +581,14 @@ async function guardOrchestratorTaskDispatch(workspace, hookInput, toolArgs, cur
   const toolName = lower(hookInput.tool);
   if (toolName !== 'task') return;
 
-  const subagentType = String((toolArgs.subagent_type || hookInput.args?.subagent_type || toolArgs.agent) || '').toLowerCase();
+  const subagentType = String((toolArgs.subagent_type || toolArgs.agent) || '').toLowerCase();
   if (!subagentType) return;
 
   const allowedHarnessAgents = new Set([
     ...HARNESS_AGENTS,
     ...CAPABILITY_AGENTS,
     ...PROBE_AGENTS,
+    "general",  // orchestrator dispatches managers via subagent_type="general"
   ]);
 
   if (!allowedHarnessAgents.has(subagentType)) {
@@ -877,24 +729,6 @@ async function recordStandardSignalsFromMessage(workspace, state, authorization,
   });
 
   return { state: nextState, hasSignals: true, hasCompletion: parsed.hasCompletion };
-}
-
-function formatSignalList(events = []) {
-  if (!events.length) return '- none';
-  return events.map((event) => {
-    const bits = [
-      event.at || '',
-      event.actor || '',
-      event.status || '',
-      event.summary || '',
-    ].filter(Boolean);
-    const line = bits.join(' | ');
-    const extras = [];
-    if ((event.artifacts || []).length) extras.push(`artifacts=${event.artifacts.join(', ')}`);
-    if ((event.blockers || []).length) extras.push(`blockers=${event.blockers.join(', ')}`);
-    if ((event.nextActions || []).length) extras.push(`next=${event.nextActions.join(', ')}`);
-    return `- ${line}${extras.length ? ` (${extras.join('; ')})` : ''}`;
-  }).join('\n');
 }
 
 async function hasNonPlaceholderText(filePath, heading) {
@@ -1161,20 +995,6 @@ async function guardAndAcquireFileWriteLock(workspace, state, actor, sessionID, 
   return nextState;
 }
 
-function completedManagerPhase(managerName) {
-  if (managerName === 'execution-manager') return 'execution';
-  if (managerName === 'acceptance-manager') return 'acceptance';
-  if (managerName === 'summary-manager') return 'summary';
-  return 'planning';
-}
-
-function withoutFirst(values, target) {
-  const next = [...(values || [])];
-  const index = next.indexOf(target);
-  if (index >= 0) next.splice(index, 1);
-  return next;
-}
-
 async function persistDeferredState(workspace, state) {
   const nextState = {
     ...state,
@@ -1197,10 +1017,6 @@ async function managerArtifactCompletionReady(workspace, state, actor) {
     return ['product-spec.md', 'features.json', 'features-summary.md'].every((name) => completedDeliverables.includes(name));
   }
   return false;
-}
-
-function toolCountsAsChildProgress(toolName) {
-  return toolName !== 'skill';
 }
 
 function opencodeDbPath() {
@@ -2010,6 +1826,63 @@ export const server = async (input) => {
         await appendEvent(workspace, 'session.created', { type: event.type });
       }
     },
+    "permission.ask": async (hookInput, output) => {
+      const { state } = await loadPluginState(workspace);
+      if (!state || state.mode !== 'harness') return;
+      if (state.blocked) {
+        output.status = 'deny';
+        await appendPluginDebug(workspace, 'permission.denied.route_blocked', { routeId: state.routeId });
+        return;
+      }
+      if (state.currentPhase === 'intake' && state.autopilotEnabled) {
+        output.status = 'allow';
+        return;
+      }
+    },
+    "tool.definition": async (hookInput, output) => {
+      const { state } = await loadPluginState(workspace);
+      if (!state || state.mode !== 'harness') return;
+      const agent = state.activeAgent || '';
+      if (!isHarnessAgent(agent)) return;
+      const toolID = String(hookInput.toolID || '');
+      const phase = state.currentPhase || '';
+      if (phase === 'acceptance' && ['edit', 'write', 'bash', 'task'].includes(toolID)) {
+        output.description = (output.description || '') + ' [ACCEPTANCE: evidence collection only, no implementation]';
+      }
+    },
+    "chat.params": async (hookInput, output) => {
+      const { state } = await loadPluginState(workspace);
+      if (!state || state.mode !== 'harness') return;
+      if (state.currentPhase === 'planning') {
+        output.temperature = 0.3;
+        output.topP = 0.8;
+      } else if (state.currentPhase === 'acceptance') {
+        output.temperature = 0.2;
+        output.topP = 0.7;
+      }
+    },
+    "experimental.session.compacting": async (hookInput, output) => {
+      const { state } = await loadPluginState(workspace);
+      if (!state || state.mode !== 'harness') return;
+      const routeInfo = [
+        `[Harness] Route: ${state.routeId}, Phase: ${state.currentPhase}, Actor: ${state.nextExpectedActor || 'none'}`,
+        `Pending managers: ${(state.pendingManagers || []).join(', ') || 'none'}`,
+        `Dispatched managers: ${(state.dispatchedManagers || []).join(', ') || 'none'}`,
+        `Selected hands: ${(state.selectedCapabilityHands || []).join(', ') || 'none'}`,
+        `Selected probes: ${(state.selectedProbes || []).join(', ') || 'none'}`,
+      ];
+      output.context = output.context || [];
+      output.context.push(...routeInfo);
+      await appendPluginDebug(workspace, 'compaction.context.preserved', { routeId: state.routeId });
+    },
+    "experimental.compaction.autocontinue": async (hookInput, output) => {
+      const { state } = await loadPluginState(workspace);
+      if (!state || state.mode !== 'harness') return;
+      if (state.currentPhase === 'acceptance' || state.currentPhase === 'complete') {
+        output.enabled = false;
+        await appendPluginDebug(workspace, 'compaction.autocontinue.disabled', { phase: state.currentPhase });
+      }
+    },
     "command.execute.before": async (hookInput, output) => {
       await appendPluginDebug(workspace, 'hook.command.before', { command: hookInput.command, arguments: hookInput.arguments, partsCount: (output.parts || []).length });
       if (isSyntheticHarnessExpansionMessage(`${hookInput.command}\n${hookInput.arguments || ''}`)) {
@@ -2202,17 +2075,17 @@ export const server = async (input) => {
           dispatchNextDeferredHand,
           dispatchNextDeferredProbe,
           finalizeDeferredAcceptance,
-          options: { forceDispatch: true },
         });
       }
 
-      // Block the LLM from processing this command — plugin owns intake
-      output.parts = [{
-        type: 'text',
-        text: newState.blocked
-          ? `Harness intake blocked: ${newState.blockedReason || 'clarification required'}`
-          : `Harness intake initialized for ${newState.routeId}. Next expected actor: ${newState.nextExpectedActor}.`,
-      }];
+      if (newState.blocked || manualControl) {
+        output.parts = [{
+          type: 'text',
+          text: newState.blocked
+            ? `Harness intake blocked: ${newState.blockedReason || 'clarification required'}`
+            : `Harness intake initialized for ${newState.routeId}. Next expected actor: ${newState.nextExpectedActor}. Use /plan, /drive, /check to advance.`,
+        }];
+      }
     },
     "chat.message": async (hookInput, output) => {
       const { state } = await loadPluginState(workspace);
@@ -2225,16 +2098,18 @@ export const server = async (input) => {
       await appendPluginDebug(workspace, 'hook.chat.message.harness', { agent, sessionID, messagePreview: message.slice(0, 200) });
       if (!message) return;
       if (agent === 'harness-orchestrator' && state?.currentPhase === 'intake') {
-        output.parts = [{
-          type: 'text',
-          text: `Harness intake initialized for ${state.routeId}. Next expected actor: ${state.nextExpectedActor}. Route packet written to .agent-memory/route-packet.json.`,
-        }];
-        await appendPluginDebug(workspace, 'hook.chat.message.orchestrator_short_circuited', {
-          reason: 'intake-only top-level response enforced',
-          routeId: state.routeId,
-          nextExpectedActor: state.nextExpectedActor,
-        });
-        return;
+        if (!state.autopilotEnabled) {
+          output.parts = [{
+            type: 'text',
+            text: `Harness intake initialized for ${state.routeId}. Next expected actor: ${state.nextExpectedActor}. Use /plan, /drive, /check to advance.`,
+          }];
+          await appendPluginDebug(workspace, 'hook.chat.message.orchestrator_short_circuited', {
+            reason: 'manual intake — top-level response enforced',
+            routeId: state.routeId,
+            nextExpectedActor: state.nextExpectedActor,
+          });
+          return;
+        }
       }
       if (agent === 'harness-orchestrator' && state?.currentPhase === 'blocked') {
         output.parts = [{
@@ -2248,17 +2123,21 @@ export const server = async (input) => {
         return;
       }
       if (agent === 'harness-orchestrator') {
-        output.parts = [{
-          type: 'text',
-          text: `Harness route ${state.routeId} is active. Top-level harness-orchestrator is supervising only; concrete work belongs to ${state.nextExpectedActor || state.activeDispatch?.actor || 'the dispatched subagent'}.`,
-        }];
-        await appendPluginDebug(workspace, 'hook.chat.message.orchestrator_short_circuited_active_route', {
-          reason: 'top-level concrete work blocked while route is active',
-          routeId: state.routeId,
-          currentPhase: state.currentPhase,
-          nextExpectedActor: state.nextExpectedActor || '',
-        });
-        return;
+        const hasPendingDispatch = state?.autopilotEnabled
+          && (state?.pendingManagers || []).length > 0;
+        if (!hasPendingDispatch) {
+          output.parts = [{
+            type: 'text',
+            text: `Harness route ${state.routeId} is active. Top-level harness-orchestrator is supervising only; concrete work belongs to ${state.nextExpectedActor || state.activeDispatch?.actor || 'the dispatched subagent'}.`,
+          }];
+          await appendPluginDebug(workspace, 'hook.chat.message.orchestrator_short_circuited_active_route', {
+            reason: 'top-level concrete work blocked while route is active',
+            routeId: state.routeId,
+            currentPhase: state.currentPhase,
+            nextExpectedActor: state.nextExpectedActor || '',
+          });
+          return;
+        }
       }
       if (isSyntheticHarnessExpansionMessage(message)) {
         await appendPluginDebug(workspace, 'hook.chat.message.synthetic_ignored', { agent });
@@ -2274,6 +2153,23 @@ export const server = async (input) => {
       if (!isHarnessAgent(agent)) return;
       output.system = output.system || [];
       output.system.unshift(...buildSystemAdditions(agent, state));
+    },
+    "experimental.chat.messages.transform": async (hookInput, output) => {
+      const { state } = await loadPluginState(workspace);
+      if (!state || state.mode !== 'harness') return;
+      if (!state.autopilotEnabled || !(state.pendingManagers || []).length) return;
+      const dispatchBlock = buildDispatchBlock(state);
+      if (!dispatchBlock.length) return;
+      const messages = output.messages || [];
+      if (messages.length === 0) return;
+      const lastMsg = messages[messages.length - 1];
+      const parts = lastMsg.parts || [];
+      parts.unshift({ type: 'text', text: dispatchBlock.join('\n') + '\n\n' } as any);
+      lastMsg.parts = parts;
+      await appendPluginDebug(workspace, 'hook.chat.messages.transform.dispatch_injected', {
+        routeId: state.routeId,
+        nextExpectedActor: state.nextExpectedActor,
+      });
     },
     "tool.execute.before": async (hookInput, output) => {
       let { state } = await loadPluginState(workspace);
@@ -2354,3 +2250,5 @@ export const server = async (input) => {
 };
 
 export default { server };
+
+export { selectCapabilityHands, selectProbes };
