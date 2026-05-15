@@ -10,6 +10,8 @@ import { reconcileRuntime } from '../dispatch/reconcile.js';
 import { markStepInProgress, recordStepRetryableError, stepIdForActorPhase } from '../dispatch/recovery.js';
 import { guardFileWrite } from '../dispatch/phase-guard.js';
 import { applyStandardSignalEvents, parseStandardSignalEvents } from '../dispatch/standard-signals.js';
+import { redactSecrets, sanitizeEnv } from '../dispatch/credential-boundary.js';
+import { createSandbox, resolveSandboxPath } from '../security/sandbox.js';
 import { selectCapabilityHands, selectProbes } from '../dispatch/capability-selector.js';
 import { createGraphRuntimeRollout, isManualHarnessMode, rolloutBudgetsForState } from '../mode/index.js';
 import { actorRequiresDelegatedAgent, actorKind, validateCompletion } from '../dispatch/role-boundary.js';
@@ -29,6 +31,7 @@ import {
 import { detectCompletedDeliverables } from '../state/file-contract.js';
 import { ensureGraphState } from '../state/migration.js';
 import { loadPluginState, savePluginState } from '../state/storage.js';
+import { SessionStore } from '../state/session-store.js';
 import {
   nowIso, requestId, lower, unique, includesAny, formatSection, formatSignalList,
   normalizeCommandName, isHarnessCommand, completedManagerPhase, withoutFirst,
@@ -422,7 +425,7 @@ async function initMemoryScaffold(workspace) {
   }
 }
 
-export async function initializeHarnessTask(workspace, message, agent, routeIdOverride = '', autopilotEnabled = true) {
+export async function initializeHarnessTask(workspace, message, agent, routeIdOverride = '', autopilotEnabled = true, taskId = '') {
   await initMemoryScaffold(workspace);
   const routeId = routeIdOverride || classifyTask(message);
   const route = routeConfig(routeId);
@@ -477,8 +480,13 @@ export async function initializeHarnessTask(workspace, message, agent, routeIdOv
     createdAt: nowIso(),
     updatedAt: nowIso(),
     rawUserInput: message,
+    taskId: taskId || null,
   });
   const routePacket = buildRoutePacket(routeId, route, state);
+  await savePluginState(workspace, state);
+  const store = new SessionStore({ workspaceRoot: workspace });
+  const session = await store.createSession({ task: message, routeId, workspaceRoot: workspace });
+  state.sessionId = session.sessionId;
   await savePluginState(workspace, state);
   await writeText(path.join(workspace, '.agent-memory', 'task.md'), buildTaskDocument(message, routeId, route, semanticLock));
   await writeText(path.join(workspace, '.agent-memory', 'route-packet.json'), JSON.stringify(routePacket, null, 2) + '\n');
@@ -486,9 +494,10 @@ export async function initializeHarnessTask(workspace, message, agent, routeIdOv
   await writeText(inboxFile, `# ${reqId}\n\n## Original request\n\n${message}\n`);
   await appendText(path.join(workspace, '.agent-memory', 'inbox', 'index.jsonl'), JSON.stringify({ id: reqId, routeId, createdAt: state.createdAt }) + '\n');
   await writeText(path.join(workspace, '.agent-memory', 'orchestration-status.md'), buildStatusProjection(state, routePacket));
-  await writeText(path.join(workspace, '.agent-memory', 'brain-brief.md'), `# Brain Brief\n\n- Request ID: ${reqId}\n- Goal: ${message}\n- Route: ${routeId}\n- Semantic lock: ${state.semanticLockStatus}\n- Next expected actor: ${state.nextExpectedActor}\n`);
+  await writeText(path.join(workspace, '.agent-memory', 'brain-brief.md'), `# Brain Brief\n\n- Request ID: ${reqId}\n- Goal: ${message}\n- Route: ${routeId}\n${taskId ? `- Task ID: ${taskId}\n` : ''}- Semantic lock: ${state.semanticLockStatus}\n- Next expected actor: ${state.nextExpectedActor}\n`);
   await writeText(path.join(workspace, '.agent-memory', 'route-summary.md'), `# Route Summary\n\n- Route ID: ${routeId}\n- Task Type: ${route.taskType}\n- Semantic Lock Status: ${state.semanticLockStatus}\n- Managers: ${route.managers.join(', ') || 'none'}\n- Hands: ${route.capability.join(', ') || 'none'}\n- Selected Hands: ${state.selectedCapabilityHands.join(', ') || 'none'}\n- Probes: ${route.probes.join(', ') || 'none'}\n- Selected Probes: ${state.selectedProbes.join(', ') || 'none'}\n- Deliverables: ${route.deliverables.join(', ') || 'none'}\n`);
   await appendText(path.join(workspace, '.agent-memory', 'activity.jsonl'), JSON.stringify({ event: 'task.intake', requestId: reqId, routeId, ts: nowIso() }) + '\n');
+  await store.emitEvent(session.sessionId, { type: 'route.initialized', actor: 'harness-orchestrator', payload: { routeId, task: message } });
   return state;
 }
 
@@ -2216,6 +2225,48 @@ export const server = async (input) => {
       }
       // ── End Phase-Actor Guard ──────────────────────────────────────
 
+      // ── Sandbox Path Routing ────────────────────────────────────
+      const route = routeConfig(state?.routeId || 'J-L1');
+      if (state?.mode === 'harness' && route?.sandbox) {
+        const sandboxState = await createSandbox(workspace);
+        const sandboxRoot = sandboxState.sandboxRoot;
+        if (['edit', 'write', 'read', 'multi_edit', 'apply_patch', 'patch'].includes(toolName) && toolArgs.filePath) {
+          try {
+            toolArgs.filePath = resolveSandboxPath(sandboxRoot, toolArgs.filePath);
+          } catch {
+            await appendPluginDebug(workspace, 'sandbox.blocked', {
+              actor: currentAgent,
+              file: toolArgs.filePath,
+              reason: 'path escapes sandbox root',
+            });
+            throw new Error(`Sandbox blocked: path ${toolArgs.filePath} escapes sandbox`);
+          }
+          output.args = { ...output.args, filePath: toolArgs.filePath };
+        }
+        if (toolName === 'bash' && toolArgs.command) {
+          // Route shell commands through sandbox-safe working directory
+          toolArgs.command = `cd ${sandboxRoot} && ${toolArgs.command}`;
+          output.args = { ...output.args, command: toolArgs.command };
+        }
+      }
+      // ── End Sandbox Routing ─────────────────────────────────────
+
+      // ── Credential Sanitization ──────────────────────────────────
+      if (toolName === 'bash' && toolArgs.command) {
+        // Sanitize sensitive env vars from command line
+        const secureShell = process.env;
+        const sanitized = sanitizeEnv(Object.fromEntries(
+          Object.entries(secureShell).filter(([k]) => typeof k === 'string')
+        ) as Record<string, string>);
+        if (Object.keys(sanitized).length !== Object.keys(secureShell).length) {
+          await appendPluginDebug(workspace, 'credential.sanitized', {
+            tool: toolName,
+            redactedKeys: Object.keys(secureShell).filter(k => !(k in sanitized)).join(','),
+          });
+        }
+      }
+      // ── End Credential Sanitization ──────────────────────────────
+
       if (lower(hookInput.tool) === 'task') {
         const inferred = inferRoleFromTaskArgs(toolArgs);
         if (inferred.foundManagers.length > 0) {
@@ -2235,6 +2286,18 @@ export const server = async (input) => {
     },
     "tool.execute.after": async (hookInput, output) => {
       const tool = lower(hookInput.tool);
+      // ── Credential Redaction in Output ────────────────────────────
+      if (output?.output && typeof output.output === 'string') {
+        const redacted = redactSecrets(output.output);
+        if (redacted !== output.output) {
+          output.output = redacted;
+          await appendPluginDebug(workspace, 'credential.redacted', { tool: hookInput.tool });
+        }
+      }
+      if (output?.title && typeof output.title === 'string') {
+        output.title = redactSecrets(output.title);
+      }
+      // ── End Credential Redaction ──────────────────────────────────
       await appendPluginDebug(workspace, 'hook.tool.after', { tool, title: output.title });
       if (tool === 'task') {
         await appendEvent(workspace, 'actor.completed', { title: output.title, metadata: output.metadata });

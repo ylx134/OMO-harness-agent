@@ -12,6 +12,7 @@ type RawRoute = {
   startup_files?: string[];
   deliverables?: string[];
   anti_shallow_bar?: string;
+  sandbox?: boolean;
   execution_mode?: {
     multi_agent?: boolean;
     single_thread_allowed?: boolean;
@@ -41,6 +42,7 @@ export function routeConfig(routeId: string): RouteConfigShape {
     startupFiles: [...(route.startup_files || [])],
     deliverables: [...(route.deliverables || [])],
     antiShallowBar: route.anti_shallow_bar,
+    sandbox: route.sandbox,
     executionMode: {
       multiAgent: Boolean(route.execution_mode?.multi_agent),
       singleThreadAllowed: Boolean(route.execution_mode?.single_thread_allowed),

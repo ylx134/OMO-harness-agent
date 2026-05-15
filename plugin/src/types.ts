@@ -68,6 +68,7 @@ export interface RouteConfigShape {
   startupFiles: string[];
   deliverables: string[];
   antiShallowBar: string;
+  sandbox?: boolean;
   executionMode: {
     multiAgent: boolean;
     singleThreadAllowed: boolean;

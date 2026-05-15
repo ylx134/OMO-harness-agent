@@ -25,5 +25,14 @@ export { default } from './runtime/server.js';
 
 export { actorRequiresDelegatedAgent, actorKind, validateCompletion } from './dispatch/role-boundary.js';
 export { SessionStore, createSession } from './state/session-store.js';
-export { loadBoard, createTask, getTaskById, getTaskByDir, updateTaskStatus, listTasks, createTaskId } from './state/task-board.js';
-export { redactSecrets, sanitizeEnv, safeEnv, redactPayload, redactState } from './dispatch/credential-boundary.js';
+export { resumeFromLastEvent, repairDerivedState, wake } from './session/recovery.js';
+export { loadBoard, createTask, getTaskById, getTaskByDir, updateTaskStatus, listTasks, createTaskId, archiveTask, resolveTaskForWorkspace } from './state/task-board.js';
+export { redactSecrets, sanitizeEnv, safeEnv, redactPayload, redactState, registerCredentialReference, resolveCredentialForTool, } from './dispatch/credential-boundary.js';
+export { createSandbox, resolveSandboxPath, isPathInSandbox, destroySandbox, saveSandboxState, loadSandboxState, } from './dispatch/sandbox.js';
+export { buildPlanIntakeGate } from './intake/plan-intake-gate.js';
+export type { IntakeGateResult } from './intake/plan-intake-gate.js';
+export { normalizeContinuationPolicy, continuationDecision } from './mode/continuation-policy.js';
+export type { ContinuationPolicy } from './mode/continuation-policy.js';
+
+export { DeterministicAgentAdapter } from './testing/simulated-agent-adapter.js';
+export { isSimulatedMode, SIMULATED_MODE } from './mode/index.js';

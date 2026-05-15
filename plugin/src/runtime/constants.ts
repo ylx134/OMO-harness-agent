@@ -23,6 +23,7 @@ const CAPABILITY_AGENTS = new Set([
   "shell-agent",
   "docs-agent",
   "evidence-agent",
+  "review-agent",
 ]);
 
 const PROBE_AGENTS = new Set([

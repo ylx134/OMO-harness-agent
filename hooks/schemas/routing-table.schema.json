@@ -61,6 +61,7 @@
               "items": { "type": "string" }
             },
             "anti_shallow_bar": { "type": "string", "minLength": 1 },
+            "sandbox": { "type": "boolean", "description": "Enable sandbox path isolation for this route" },
             "execution_mode": {
               "type": "object",
               "required": ["multi_agent", "single_thread_allowed", "requires_contract_negotiation"],

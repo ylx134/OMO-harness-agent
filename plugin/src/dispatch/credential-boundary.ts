@@ -1,5 +1,37 @@
 import type { GraphStateLike } from '../types.js';
 
+// ── Credential Registry ──────────────────────────────────────────────
+export interface CredentialReference {
+  name: string;
+  provider: string;
+  toolScope?: string[];
+}
+
+const credentialRegistry = new Map<string, CredentialReference>();
+
+export function registerCredentialReference(ref: CredentialReference): void {
+  credentialRegistry.set(ref.name, ref);
+}
+
+export function resolveCredentialForTool(toolName: string): Record<string, string> {
+  const resolved: Record<string, string> = {};
+  for (const ref of credentialRegistry.values()) {
+    if (ref.toolScope && ref.toolScope.length > 0 && !ref.toolScope.includes(toolName)) {
+      continue;
+    }
+    const value = process.env[ref.name];
+    if (value !== undefined) {
+      resolved[ref.name] = value;
+    }
+  }
+  return resolved;
+}
+
+export function getRegisteredCredentials(): CredentialReference[] {
+  return Array.from(credentialRegistry.values());
+}
+
+// ── Redaction Patterns & Sensitive Keys ──────────────────────────────
 const REDACT_SECRETS: RegExp[] = [
   /(api[_-]?key|apikey|access[_-]?token|auth[_-]?token|secret|password|credential|private[_-]?key|bearer)[=:]\s*\S+/gi,
   /"?(api[_-]?key|apikey|access[_-]?token|auth[_-]?token|secret|password|credential|private[_-]?key|bearer)"?\s*:\s*"[^"]+"/gi,

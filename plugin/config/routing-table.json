@@ -52,6 +52,7 @@
       "startup_files": ["task.md", "capability-map.md", "gap-analysis.md", "working-memory.md", "round-contract.md", "orchestration-status.md"],
       "deliverables": ["task.md", "round-contract.md", "execution-status.md", "evidence-ledger.md", "acceptance-report.md", "final-summary.md", "handoff-summary.md"],
       "anti_shallow_bar": "do not count visible output alone as progress; the named gap must shrink",
+      "sandbox": true,
       "execution_mode": {
         "multi_agent": true,
         "single_thread_allowed": false,
@@ -75,6 +76,7 @@
       "startup_files": ["task.md", "baseline-source.md", "capability-map.md", "gap-analysis.md", "quality-guardrails.md", "working-memory.md", "round-contract.md", "orchestration-status.md"],
       "deliverables": ["baseline-source.md", "capability-map.md", "gap-analysis.md", "task.md", "round-contract.md", "execution-status.md", "evidence-ledger.md", "acceptance-report.md", "final-summary.md", "handoff-summary.md"],
       "anti_shallow_bar": "do not accept a shell that only looks complete; hidden rule or deeper ability must be proved",
+      "sandbox": true,
       "execution_mode": {
         "multi_agent": true,
         "single_thread_allowed": false,

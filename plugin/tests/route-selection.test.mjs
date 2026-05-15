@@ -24,6 +24,7 @@ function expectedRoute(routeId) {
     startupFiles: route.startup_files,
     deliverables: route.deliverables,
     antiShallowBar: route.anti_shallow_bar,
+    sandbox: route.sandbox,
     executionMode: {
       multiAgent: route.execution_mode.multi_agent,
       singleThreadAllowed: route.execution_mode.single_thread_allowed,

@@ -220,6 +220,7 @@ export function buildStatusProjection(state, routePacket) {
     `- Required Deliverables: ${formatList(routePacket.requiredDeliverables)}`,
     `- Missing Deliverables: ${formatList(routePacket.missingDeliverables)}`,
     `- Route Blocking Gaps: ${formatList(routePacket.routeBlockingGaps)}`,
+    `- Task ID: ${state.taskId || 'none'}`,
     `- Blocked: ${Boolean(state.blocked)}`,
     `- Blocked Reason: ${state.blockedReason || 'none'}`,
     '',

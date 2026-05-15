@@ -74,3 +74,9 @@ export function rolloutBudgetsForState(state: RuntimeRolloutState = null, overri
 }
 
 export { BOUNDED_CONCURRENCY_BUDGETS, SERIAL_COMPAT_BUDGETS };
+
+export const SIMULATED_MODE = process.env.OPENCODE_HARNESS_SIMULATED === '1';
+
+export function isSimulatedMode(): boolean {
+  return process.env.OPENCODE_HARNESS_SIMULATED === '1';
+}
