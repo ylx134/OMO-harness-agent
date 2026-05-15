@@ -35,7 +35,8 @@ SKILLS=(
   "ui-probe-agent"
   "api-probe-agent"
   "regression-probe-agent"
-  "artifact-probe-agent"
+  "artifact-probe-agent",
+  "review-agent"
 )
 
 HOOKS=(
@@ -46,7 +47,8 @@ HOOKS=(
   "probe-evidence-guard.js"
   "managed-route-completeness-guard.js"
   "schema-guard.js"
-  "summary-supervision-guard.js"
+  "summary-supervision-guard.js",
+  "output-contract-guard.js"
 )
 
 DEPRECATED_HOOKS=(
@@ -228,23 +230,56 @@ fi
 # ── Harness-pure isolated profile (harness command uses this) ─────
 mkdir -p "$HARNESS_PURE_DIR/skills" "$HARNESS_PURE_DIR/hooks" "$HARNESS_PURE_DIR/agents/agent" "$HARNESS_PURE_DIR/plugins"
 
-# Write opencode.json: OMO for task() engine, harness plugin loaded from plugins/ directory
-python3 - "$HARNESS_PURE_DIR/opencode.json" <<'PY'
-import json, sys
-config_path = sys.argv[1]
-data = {"$schema": "https://opencode.ai/config.json", "plugin": []}
+# Write opencode.json for harness-pure:
+#  - Load only the harness plugin (NOT oh-my-openagent or other plugins)
+#  - Copy model and provider config from main opencode profile so agents can call APIs
+python3 - "$HARNESS_PURE_DIR/opencode.json" "$OPENCODE_MAIN_CONFIG_FILE" "$PLUGIN_DIR" <<'PY'
+import json, os, sys
+
+harness_config_path, main_config_path, plugin_dir = sys.argv[1:4]
+
+# Start with harness-only plugin
+data = {
+    "$schema": "https://opencode.ai/config.json",
+    "plugin": [plugin_dir],
+}
+
+# Copy model + provider from main opencode config (if it exists)
+if os.path.exists(main_config_path):
+    with open(main_config_path) as f:
+        main_cfg = json.load(f)
+    for key in ("model", "provider"):
+        if key in main_cfg:
+            data[key] = main_cfg[key]
+
+with open(harness_config_path, 'w') as f:
+    json.dump(data, f, indent=2)
+    f.write('\n')
+
+copied = [k for k in data if k not in ("$schema", "plugin")]
+print(f'  ✅ wrote harness-pure opencode.json (plugin=harness-only, copied: {", ".join(copied) if copied else "none"})')
+PY
+
+# Write harness-only agent config — only harness agents, no OMO agents
+python3 - "$HARNESS_PURE_DIR/oh-my-openagent.json" "$SOURCE_DIR/oh-my-openagent.harness.json" <<'PY'
+import json, os, sys
+
+config_path, harness_agent_path = sys.argv[1:3]
+with open(harness_agent_path) as f:
+    harness_cfg = json.load(f)
+
+# Write only the harness agent definitions, no OMO agents
+data = {"agents": harness_cfg.get("agents", {})}
+
 with open(config_path, 'w') as f:
     json.dump(data, f, indent=2)
     f.write('\n')
-print(f'  ✅ wrote harness-pure opencode.json')
+
+agent_names = list(data["agents"].keys())
+print(f'  ✅ wrote harness-pure oh-my-openagent.json ({len(agent_names)} agents: {", ".join(agent_names[:4])}...)')
 PY
 
-# Local plugin entry (OpenCode auto-discovers .js files in plugins/ directory)
-cat > "$HARNESS_PURE_DIR/plugins/harness-plugin.js" << PLUGINEOF
-import { server } from "${SOURCE_DIR}/plugin/dist/index.js"
-export { server }
-PLUGINEOF
-echo -e "  ✅ created harness plugin entry: plugins/harness-plugin.js"
+echo -e "  ✅ harness-pure profile ready: only harness plugin + harness agents + same model/provider as opencode"
 
 # Symlink skills into harness-pure
 for skill in "${SKILLS[@]}"; do
