@@ -228,7 +228,7 @@ if [ -d "$SOURCE_DIR/hooks/schemas" ]; then
 fi
 
 # ── Harness-pure isolated profile (harness command uses this) ─────
-mkdir -p "$HARNESS_PURE_DIR/skills" "$HARNESS_PURE_DIR/hooks" "$HARNESS_PURE_DIR/agents/agent" "$HARNESS_PURE_DIR/plugins"
+mkdir -p "$HARNESS_PURE_DIR/skills" "$HARNESS_PURE_DIR/hooks" "$HARNESS_PURE_DIR/agents/agent"
 
 # Write opencode.json for harness-pure:
 #  - Load only the harness plugin (NOT oh-my-openagent or other plugins)
