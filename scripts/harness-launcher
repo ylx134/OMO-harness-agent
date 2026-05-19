@@ -6,6 +6,43 @@
 #   harness --agent ... .  → custom agent
 
 set -euo pipefail
+
+MAIN_CONFIG="$HOME/.config/opencode/opencode.json"
+HARNESS_CONFIG="$HOME/.config/opencode-profiles/harness-pure/opencode/opencode.json"
+
+# Sync model and provider from main config before every launch.
+# This ensures harness inherits the latest model configurations
+# without requiring the user to maintain two copies.
+if [[ -f "$MAIN_CONFIG" ]] && [[ -f "$HARNESS_CONFIG" ]]; then
+  python3 -c "
+import json, os, sys, shutil
+
+main_path = os.path.expanduser('$MAIN_CONFIG')
+harness_path = os.path.expanduser('$HARNESS_CONFIG')
+
+with open(main_path) as f:
+    main = json.load(f)
+with open(harness_path) as f:
+    harness = json.load(f)
+
+changed = False
+for key in ('model', 'provider'):
+    if key in main:
+        old = json.dumps(harness.get(key), sort_keys=True, ensure_ascii=False)
+        new = json.dumps(main[key], sort_keys=True, ensure_ascii=False)
+        if old != new:
+            harness[key] = main[key]
+            changed = True
+
+if changed:
+    tmp = harness_path + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump(harness, f, indent=2)
+        f.write('\n')
+    os.replace(tmp, harness_path)
+" 2>/dev/null || true
+fi
+
 export XDG_CONFIG_HOME="$HOME/.config/opencode-profiles/harness-pure"
 
 AGENT="${HARNESS_AGENT:-harness-orchestrator}"
