@@ -166,7 +166,7 @@ test('acceptance closure completion only requires terminal steps that can still 
 
   const closure = plugin.completeGraphStep(state, {
     stepId: 'acceptance-closure:acceptance-manager',
-    source: 'tool',
+    source: 'session-store',
     completedAt: '2026-04-21T00:04:00.000Z',
     deliverablesSatisfied: true,
   });

@@ -1,3 +1,3 @@
 import { id, server } from './dist/index.js';
-export { id, server };
+export * from './dist/index.js';
 export default { id, server };

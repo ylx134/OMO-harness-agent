@@ -36,6 +36,7 @@ export type RequestHandler = (request: JsonRpcRequest) => Promise<JsonRpcRespons
  *   and returns a JSON-RPC response (or null for notifications).
  */
 export function startStdioTransport(handler: RequestHandler): void {
+  process.stdin.resume();
   const rl = createInterface({ input: process.stdin });
 
   // Avoid the process exiting because stdin is paused

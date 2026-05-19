@@ -1036,8 +1036,20 @@ function latestCompletedAssistantMessage(sessionID = '', startedAt = '') {
   if (!sessionID) return null;
   const startedAtMs = Number.isFinite(Date.parse(startedAt)) ? Date.parse(startedAt) : 0;
   let db: DatabaseSync | undefined;
+
   try {
     db = new DatabaseSync(opencodeDbPath(), { readonly: true });
+  } catch {
+    try {
+      db = new DatabaseSync(opencodeDbPath(), { readonly: true });
+    } catch {
+      return null;
+    }
+  }
+
+  if (!db) return null;
+
+  try {
     const rows = db.prepare('SELECT data FROM message WHERE session_id = ? AND time_created >= ? ORDER BY time_created DESC LIMIT 25').all(sessionID, startedAtMs);
     for (const row of rows) {
       const data = JSON.parse(row.data || '{}');
@@ -1049,7 +1061,7 @@ function latestCompletedAssistantMessage(sessionID = '', startedAt = '') {
   } catch {
     return null;
   } finally {
-    try { db?.close(); } catch {}
+    try { db.close(); } catch {}
   }
   return null;
 }
@@ -1722,7 +1734,7 @@ async function completeDeferredAcceptanceClosure(workspace, state, completionSou
   const completedDeliverables = await detectCompletedDeliverables(workspace, route);
   const completed = completeGraphStep(state, {
     stepId: stepIdForActorPhase(state, 'acceptance-manager', 'acceptance-closure'),
-    source: completionSource || (state?.activeDispatch?.phase === 'acceptance-closure' ? 'chat' : 'session-store'),
+    source: 'session-store',
     deliverablesSatisfied: route.deliverables.every((name) => completedDeliverables.includes(name)),
   });
   if (!completed.changed) return completed.state;

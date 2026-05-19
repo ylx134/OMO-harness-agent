@@ -7,28 +7,48 @@ export interface CredentialReference {
   toolScope?: string[];
 }
 
-const credentialRegistry = new Map<string, CredentialReference>();
+export function createCredentialRegistry(): {
+  registerCredentialReference: (ref: CredentialReference) => void;
+  resolveCredentialForTool: (toolName: string) => Record<string, string>;
+  getRegisteredCredentials: () => CredentialReference[];
+} {
+  const registry = new Map<string, CredentialReference>();
+
+  return {
+    registerCredentialReference(ref: CredentialReference): void {
+      registry.set(ref.name, ref);
+    },
+    resolveCredentialForTool(toolName: string): Record<string, string> {
+      const resolved: Record<string, string> = {};
+      for (const ref of registry.values()) {
+        if (ref.toolScope && ref.toolScope.length > 0 && !ref.toolScope.includes(toolName)) {
+          continue;
+        }
+        const value = process.env[ref.name];
+        if (value !== undefined) {
+          resolved[ref.name] = value;
+        }
+      }
+      return resolved;
+    },
+    getRegisteredCredentials(): CredentialReference[] {
+      return Array.from(registry.values());
+    },
+  };
+}
+
+const defaultRegistry = createCredentialRegistry();
 
 export function registerCredentialReference(ref: CredentialReference): void {
-  credentialRegistry.set(ref.name, ref);
+  defaultRegistry.registerCredentialReference(ref);
 }
 
 export function resolveCredentialForTool(toolName: string): Record<string, string> {
-  const resolved: Record<string, string> = {};
-  for (const ref of credentialRegistry.values()) {
-    if (ref.toolScope && ref.toolScope.length > 0 && !ref.toolScope.includes(toolName)) {
-      continue;
-    }
-    const value = process.env[ref.name];
-    if (value !== undefined) {
-      resolved[ref.name] = value;
-    }
-  }
-  return resolved;
+  return defaultRegistry.resolveCredentialForTool(toolName);
 }
 
 export function getRegisteredCredentials(): CredentialReference[] {
-  return Array.from(credentialRegistry.values());
+  return defaultRegistry.getRegisteredCredentials();
 }
 
 // ── Redaction Patterns & Sensitive Keys ──────────────────────────────

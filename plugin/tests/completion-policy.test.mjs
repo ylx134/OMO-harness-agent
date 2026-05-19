@@ -93,7 +93,7 @@ test('acceptance closure stays gated until graph completion and deliverables are
 
   const blocked = plugin.completeGraphStep(state, {
     stepId: 'acceptance-closure:acceptance-manager',
-    source: 'tool',
+    source: 'session-store',
     completedAt: '2026-04-21T00:10:00.000Z',
     deliverablesSatisfied: false,
   });
@@ -121,7 +121,7 @@ test('acceptance closure stays gated until graph completion and deliverables are
 
   const closure = plugin.completeGraphStep(completedState, {
     stepId: 'acceptance-closure:acceptance-manager',
-    source: 'tool',
+    source: 'session-store',
     completedAt: '2026-04-21T00:10:00.000Z',
     deliverablesSatisfied: true,
   });

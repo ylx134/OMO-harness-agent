@@ -54,7 +54,7 @@ export function canStepCompleteFromSource(state, stepId, source) {
   }
 
   if (step.kind === 'acceptance-closure') {
-    return ['session-store', 'chat', 'tool'].includes(source);
+    return source === 'session-store';
   }
 
   return false;

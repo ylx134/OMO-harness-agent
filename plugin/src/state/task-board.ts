@@ -2,7 +2,10 @@ import { promises as fs } from 'node:fs';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { execSync } from 'node:child_process';
+import { exec as execCb } from 'node:child_process';
+import { promisify } from 'node:util';
+
+const exec = promisify(execCb);
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -67,7 +70,7 @@ interface LockOptions {
  *
  * @returns a synchronous release function.
  */
-function acquireBoardLock(boardRoot: string, options?: LockOptions): () => void {
+async function acquireBoardLock(boardRoot: string, options?: LockOptions): Promise<() => void> {
   const lockDir = path.join(boardRoot, '.lock');
   const staleMs = options?.staleMs ?? 300_000;
   const retryInterval = 25;
@@ -110,7 +113,7 @@ function acquireBoardLock(boardRoot: string, options?: LockOptions): () => void 
         );
       }
 
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, retryInterval);
+      await new Promise(resolve => setTimeout(resolve, retryInterval));
     }
   }
 
@@ -125,7 +128,7 @@ function acquireBoardLock(boardRoot: string, options?: LockOptions): () => void 
  * Acquire the board lock, execute `fn`, then release.
  */
 async function withBoardLock<T>(boardRoot: string, fn: () => Promise<T>): Promise<T> {
-  const release = acquireBoardLock(boardRoot);
+  const release = await acquireBoardLock(boardRoot);
   try {
     return await fn();
   } finally {
@@ -167,15 +170,13 @@ export async function createTask(
     const taskWorkspaceRoot = worktreeDir(root, taskId);
 
     try {
-      execSync(`git worktree add -b ${branchName} ${taskWorkspaceRoot}`, {
+      await exec(`git worktree add -b ${branchName} ${taskWorkspaceRoot}`, {
         cwd: root,
-        encoding: 'utf8',
-        stdio: 'pipe',
       });
     } catch (err: any) {
       if (err.stderr && /already exists/i.test(String(err.stderr))) {
-        try { execSync(`git worktree remove --force ${taskWorkspaceRoot}`, { cwd: root, stdio: 'pipe' }); } catch { /* noop */ }
-        execSync(`git worktree add -b ${branchName} ${taskWorkspaceRoot}`, { cwd: root, stdio: 'pipe' });
+        try { await exec(`git worktree remove --force ${taskWorkspaceRoot}`, { cwd: root }); } catch { /* noop */ }
+        await exec(`git worktree add -b ${branchName} ${taskWorkspaceRoot}`, { cwd: root });
       } else if (err.message && /already exists/i.test(String(err.message))) {
         // swallow — worktree already checked out
       } else {
@@ -253,16 +254,14 @@ export async function archiveTask(root: string, taskId: string): Promise<TaskRec
     task.updatedAt = nowIso();
 
     try {
-      execSync(`git worktree remove --force ${task.taskWorkspaceRoot}`, {
+      await exec(`git worktree remove --force ${task.taskWorkspaceRoot}`, {
         cwd: root,
-        stdio: 'pipe',
       });
     } catch { /* worktree may already be gone */ }
 
     try {
-      execSync(`git branch -D ${task.branchName}`, {
+      await exec(`git branch -D ${task.branchName}`, {
         cwd: root,
-        stdio: 'pipe',
       });
     } catch { /* branch may already be gone */ }
 
