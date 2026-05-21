@@ -71,9 +71,9 @@ test('reconcile preserves manager order while recording concurrent hand fan-out'
   await emitCompletion(hooks, 'execution-manager', state.activeDispatch.sessionID);
 
   state = await readState(workspace);
-  assert.deepEqual(dispatched.map((entry) => entry.actor), ['planning-manager', 'execution-manager', 'shell-agent', 'evidence-agent']);
-  assert.deepEqual(new Set(state.activeStepIds), new Set(['capability-hand:shell-agent', 'capability-hand:evidence-agent']));
-  assert.equal(state.activeDispatch?.actor, 'evidence-agent');
+  assert.deepEqual(dispatched.map((entry) => entry.actor), ['planning-manager', 'execution-manager', 'shell-agent', 'code-agent']);
+  assert.deepEqual(new Set(state.activeStepIds), new Set(['capability-hand:shell-agent', 'capability-hand:code-agent']));
+  assert.equal(state.activeDispatch?.actor, 'code-agent');
 
   const debug = await readFile(path.join(workspace, '.agent-memory', 'harness-plugin-debug.log'), 'utf8');
   assert.match(debug, /reconcile\.runtime\.started/);

@@ -62,7 +62,7 @@ export function resolveGraphRuntimeRollout(state: RuntimeRolloutState = null) {
   }
 
   if (state?.autopilotEnabled === true) {
-    return createGraphRuntimeRollout({ mode: 'serial-compat' });
+    return createGraphRuntimeRollout({ mode: 'bounded-concurrency' });
   }
 
   return createGraphRuntimeRollout({ mode: 'serial-compat' });

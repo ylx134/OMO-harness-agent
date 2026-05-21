@@ -145,8 +145,8 @@ function createGraphState() {
     blockedStepIds: ['capability-hand:evidence-agent'],
     retryQueue: [],
     heldLocks: {
-      'workspace-write': 'capability-hand:shell-agent',
       'build-runner': 'capability-hand:shell-agent',
+      'workspace-setup': 'capability-hand:shell-agent',
     },
     signals: {
       'build-artifacts-ready': {
@@ -176,7 +176,7 @@ test('buildStatusProjection renders graph runtime summary alongside legacy compa
   assert.match(status, /Active Step IDs: capability-hand:shell-agent/);
   assert.match(status, /Ready Step IDs: capability-hand:code-agent/);
   assert.match(status, /Blocked Step IDs: capability-hand:evidence-agent/);
-  assert.match(status, /Held Locks: workspace-write=capability-hand:shell-agent, build-runner=capability-hand:shell-agent/);
+  assert.match(status, /Held Locks: build-runner=capability-hand:shell-agent, workspace-setup=capability-hand:shell-agent/);
   assert.match(status, /Signal Summary: 1 emitted, 1 pending/);
   assert.match(status, /Emitted Signals: build-artifacts-ready/);
   assert.match(status, /Pending Signals: verification-summary-ready/);

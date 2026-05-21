@@ -43,6 +43,6 @@ test('compileRouteGraph creates a stable step graph with concurrent execution fa
   assert.deepEqual(graph.steps['acceptance-closure:acceptance-manager'].dependsOnStepIds, ['manager:summary-manager']);
   assert.deepEqual(graph.steps['manager:summary-manager'].producesDeliverables, ['final-summary.md', 'handoff-summary.md']);
   assert.deepEqual(graph.steps['capability-hand:docs-agent'].resourceLocks, ['docs-write']);
-  assert.deepEqual(graph.steps['capability-hand:code-agent'].resourceLocks, ['workspace-write']);
-  assert.deepEqual(graph.steps['capability-hand:shell-agent'].resourceLocks, ['workspace-write', 'build-runner']);
+  assert.deepEqual(graph.steps['capability-hand:code-agent'].resourceLocks, ['source-edit']);
+  assert.deepEqual(graph.steps['capability-hand:shell-agent'].resourceLocks, ['build-runner', 'workspace-setup']);
 });

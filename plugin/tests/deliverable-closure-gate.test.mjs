@@ -81,12 +81,12 @@ test('single /control stops at retryable acceptance closure when deliverables ar
   await advanceUntil(workspace, hooks, (state) => state.deferredDispatchState === 'retryable_error');
 
   const after = await readState(workspace);
-  assert.deepEqual(dispatched.map((entry) => entry.actor), [
+assert.deepEqual(dispatched.map((entry) => entry.actor), [
     'planning-manager',
     'execution-manager',
     'shell-agent',
-    'evidence-agent',
     'code-agent',
+    'evidence-agent',
     'acceptance-manager',
     'regression-probe-agent',
     'artifact-probe-agent',
@@ -123,8 +123,8 @@ test('single /control marks complete only after acceptance closure itself comple
     'planning-manager',
     'execution-manager',
     'shell-agent',
-    'evidence-agent',
     'code-agent',
+    'evidence-agent',
     'acceptance-manager',
     'regression-probe-agent',
     'artifact-probe-agent',

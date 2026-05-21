@@ -80,7 +80,7 @@ test('buildManagedAgentIndexProjection adds graph runtime fields without removin
     readyStepIds: ['capability-hand:docs-agent', 'capability-hand:shell-agent'],
     blockedStepIds: ['probe:api-probe-agent'],
     heldLocks: {
-      'workspace-write': 'capability-hand:code-agent',
+      'source-edit': 'capability-hand:code-agent',
     },
     signals: {
       'capability-spec-ready': {
@@ -109,7 +109,7 @@ test('buildManagedAgentIndexProjection adds graph runtime fields without removin
   assert.deepEqual(index.graph_runtime.ready_step_ids, ['capability-hand:docs-agent', 'capability-hand:shell-agent']);
   assert.deepEqual(index.graph_runtime.blocked_step_ids, ['probe:api-probe-agent']);
   assert.deepEqual(index.graph_runtime.held_locks, {
-    'workspace-write': 'capability-hand:code-agent',
+    'source-edit': 'capability-hand:code-agent',
   });
   assert.deepEqual(index.graph_runtime.signal_summary, {
     total: 2,

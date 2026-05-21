@@ -16,7 +16,7 @@ async function readState(workspace) {
   return JSON.parse(await readFile(path.join(workspace, '.agent-memory', 'harness-plugin-state.json'), 'utf8'));
 }
 
-test('legacy live state upgrades through storage and reconciles with serial compatibility budgets by default', async () => {
+test('legacy live state upgrades through storage and reconciles with bounded-concurrency budgets when autopilot is enabled', async () => {
   const workspace = await mkdtemp(path.join(os.tmpdir(), 'harness-legacy-live-upgrade-'));
   await mkdir(path.join(workspace, '.agent-memory'), { recursive: true });
 
@@ -99,12 +99,12 @@ test('legacy live state upgrades through storage and reconciles with serial comp
 
   const upgraded = await readState(workspace);
   assert.equal(upgraded.schemaVersion, 2);
-  assert.equal(upgraded.graphRuntimeRollout?.mode, 'serial-compat');
-  assert.deepEqual(upgraded.graphRuntimeRollout?.budgets, { managers: 1, hands: 1, probes: 1 });
-  assert.deepEqual(dispatched.map((entry) => entry.actor), ['shell-agent']);
+  assert.equal(upgraded.graphRuntimeRollout?.mode, 'bounded-concurrency');
+  assert.deepEqual(upgraded.graphRuntimeRollout?.budgets, { managers: 1, hands: 2, probes: 2 });
+  assert.deepEqual(dispatched.map((entry) => entry.actor), ['shell-agent', 'code-agent']);
 	  assert.deepEqual(upgraded.pendingManagers, ['acceptance-manager', 'summary-manager']);
-  assert.deepEqual(upgraded.activeStepIds, ['capability-hand:shell-agent']);
-  assert.equal(upgraded.activeDispatch?.actor, 'shell-agent');
+  assert.deepEqual(new Set(upgraded.activeStepIds), new Set(['capability-hand:shell-agent', 'capability-hand:code-agent']));
+  assert.equal(upgraded.activeDispatch?.actor, 'code-agent');
 
   await rm(workspace, { recursive: true, force: true });
 });

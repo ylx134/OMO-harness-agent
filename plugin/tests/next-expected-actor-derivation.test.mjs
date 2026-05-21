@@ -69,8 +69,8 @@ function createState(overrides = {}) {
     blockedStepIds: [],
     retryQueue: [],
     heldLocks: {
-      'workspace-write': 'capability-hand:shell-agent',
       'build-runner': 'capability-hand:shell-agent',
+      'workspace-setup': 'capability-hand:shell-agent',
     },
     signals: {},
     ...overrides,

@@ -77,13 +77,17 @@ test('single /control dispatches acceptance-manager before probes and waits for 
   await reachAcceptanceManager(workspace, hooks);
 
   let after = await readState(workspace);
-  assert.deepEqual(dispatched.map((entry) => entry.actor), [
+assert.deepEqual(dispatched.map((entry) => entry.actor), [
     'planning-manager',
     'execution-manager',
     'shell-agent',
-    'evidence-agent',
     'code-agent',
+    'evidence-agent',
     'acceptance-manager',
+    'regression-probe-agent',
+    'artifact-probe-agent',
+    'summary-manager',
+    'acceptance-manager'
   ]);
   assert.deepEqual(after.pendingManagers, ['acceptance-manager', 'summary-manager']);
   assert.deepEqual(after.pendingProbes, ['regression-probe-agent', 'artifact-probe-agent']);
@@ -94,12 +98,12 @@ test('single /control dispatches acceptance-manager before probes and waits for 
   await completeActiveDispatch(workspace, hooks);
 
   after = await readState(workspace);
-  assert.deepEqual(dispatched.map((entry) => entry.actor), [
+assert.deepEqual(dispatched.map((entry) => entry.actor), [
     'planning-manager',
     'execution-manager',
     'shell-agent',
-    'evidence-agent',
     'code-agent',
+    'evidence-agent',
     'acceptance-manager',
     'regression-probe-agent',
     'artifact-probe-agent',
@@ -152,18 +156,18 @@ test('single /control waits for all live probes before asking for final closure'
   assert.match(debug, /deferred\.probe\.dispatch\.requested/);
   assert.match(debug, /deferred\.manager\.dispatch\.requested/);
   assert.match(debug, /deferred\.acceptance\.closure\.requested/);
-  assert.deepEqual(dispatched.map((entry) => entry.actor), [
+assert.deepEqual(dispatched.map((entry) => entry.actor), [
     'planning-manager',
     'execution-manager',
     'shell-agent',
-    'evidence-agent',
     'code-agent',
-	    'acceptance-manager',
-	    'regression-probe-agent',
-	    'artifact-probe-agent',
-	    'summary-manager',
-	    'acceptance-manager',
-	  ]);
+    'evidence-agent',
+    'acceptance-manager',
+    'regression-probe-agent',
+    'artifact-probe-agent',
+    'summary-manager',
+    'acceptance-manager'
+  ]);
 
   await rm(workspace, { recursive: true, force: true });
 });

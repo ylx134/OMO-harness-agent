@@ -49,19 +49,19 @@ async function completeActiveDispatch(workspace, hooks) {
   );
 }
 
-test('conflicting capability hands remain serialized under held locks while non-conflicting hands may still run', async () => {
+test('granular locks allow non-conflicting capability hands to run concurrently while still tracking held resources', async () => {
   const { workspace, hooks, dispatched } = await setupHarness('修复构建报错并补上回归验证');
 
   await completeActiveDispatch(workspace, hooks);
   await completeActiveDispatch(workspace, hooks);
 
   const state = await readState(workspace);
-  assert.deepEqual(dispatched.map((entry) => entry.actor), ['planning-manager', 'execution-manager', 'shell-agent', 'evidence-agent']);
-  assert.deepEqual(new Set(state.activeStepIds), new Set(['capability-hand:shell-agent', 'capability-hand:evidence-agent']));
-  assert.equal(state.heldLocks['workspace-write'], 'capability-hand:shell-agent');
+  assert.deepEqual(dispatched.map((entry) => entry.actor), ['planning-manager', 'execution-manager', 'shell-agent', 'code-agent']);
+  assert.deepEqual(new Set(state.activeStepIds), new Set(['capability-hand:shell-agent', 'capability-hand:code-agent']));
   assert.equal(state.heldLocks['build-runner'], 'capability-hand:shell-agent');
-  assert.equal(state.heldLocks['evidence-write'], 'capability-hand:evidence-agent');
-  assert.ok(!state.activeStepIds.includes('capability-hand:code-agent'));
+  assert.equal(state.heldLocks['workspace-setup'], 'capability-hand:shell-agent');
+  assert.equal(state.heldLocks['source-edit'], 'capability-hand:code-agent');
+  assert.ok(state.activeStepIds.includes('capability-hand:code-agent'));
 
   await rm(workspace, { recursive: true, force: true });
 });

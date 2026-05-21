@@ -21,8 +21,8 @@ export function boundedDispatchBudgets() {
 
 export function resourceLocksForStep(step: Partial<GraphStep> = {}) {
   if (step.kind !== 'capability-hand') return [];
-  if (step.actor === 'shell-agent') return ['workspace-write', 'build-runner'];
-  if (step.actor === 'code-agent') return ['workspace-write'];
+  if (step.actor === 'shell-agent') return ['build-runner', 'workspace-setup'];
+  if (step.actor === 'code-agent') return ['source-edit'];
   if (step.actor === 'docs-agent') return ['docs-write'];
   if (step.actor === 'evidence-agent') return ['evidence-write'];
   return [];
